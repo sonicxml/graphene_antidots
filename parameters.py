@@ -65,8 +65,8 @@ nanometers = True   # True if parameter units are in nanometers, false if in Ang
 # General Lattice Parameters
 #
 
-width = 50             # Width of the unit cell
-height = 50              # Height of the unit cell
+width = 20             # Width of the unit cell
+height = 20              # Height of the unit cell
 num_x_trans = 0    # Number of times to translate unit cell along the x-axis
 num_y_trans = 0    # Number of times to translate unit cell along the y-axis
 cut_type = 0       # 0 if no antidots, 1 if rectangular

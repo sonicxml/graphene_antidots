@@ -366,16 +366,16 @@ def dos():
     plt.show()
 
 
-def dos_negf(H):
+def dos_negf(H, atoms):
     """
     Calculate the density of states across the graphene sheet using a recursive Non-Equilibrium Green's Function
     """
 
-    H = sparse.dia_matrix(H)             # Convert H to a matrix
+    # H = sparse.dia_matrix(H)             # Convert H to a matrix
 
     eta = 1e-3
 
-    I = np.eye(H.shape[0])
+    I = sparse.eye(atoms)
 
     # Min and Max Energy Values
     E_min = -10
@@ -393,7 +393,7 @@ def dos_negf(H):
         EE = E[kp]
         print str(EE)
 
-        G = np.asmatrix(linalg.inv((EE + 1j * eta) * I - H))
+        G = np.asmatrix(spla.inv((EE + 1j * eta) * I - H))
 
         N[kp] = (-1 / np.pi) * np.imag(np.trace(G))
 
@@ -426,15 +426,15 @@ def dos_eig(H, atoms):
     # rank = np.sum(s > 1e-12)
 
     print "Calculating eigenvalues"
-    # vals = spla.eigs(H, k=atoms - 2, return_eigenvectors=False)
+    vals = spla.eigsh(H, 500, which='BE', return_eigenvectors=False)
     # vals = linalg.eigvals(H.todense())
-    vals = jdsym.jdsym(H, None, None, atoms, 0, 1e-12, atoms, krylov.qmrs)[1]
+    # vals = jdsym.jdsym(H, None, None, atoms, 1.2, 1e-12, atoms, krylov.qmrs)[1]
     del H
     Ne = np.size(vals)
     print "Ne = %s" % str(Ne)
     print "Eigenvalues calculated"
     # Number of bins
-    Nb = Ne
+    Nb = 20
 
     # Min and Max Energy Values
     E_min = -10
@@ -469,8 +469,8 @@ def dos_eig(H, atoms):
     N = N / atoms
 
     data = np.column_stack((E, N))
-    np.savetxt('DataTxt/pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
-    np.savetxt('DataTxt/pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
+    # np.savetxt('DataTxt/pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
+    # np.savetxt('DataTxt/pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
 
     plt.figure(2)
     plt.plot(E, N)
@@ -614,9 +614,9 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
 
     print "Start Ham calc"
     max_size = 16000     # Keep arrays at max size of around 2 GB. Also limits lattice to ~1969 nm.
-    diff = y_atoms - 1 if build_hor else x_atoms - 1
-    if diff == 0:
-        diff += 1
+    diff = y_atoms if build_hor else x_atoms
+    # if diff == 0:
+    #     diff += 1
     num = coord.shape[0]    # Number of atoms in the lattice
     print "num = " + str(num)
 
@@ -647,14 +647,14 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
             row_data = rows + bound1
             col_data = cols + bound1
     del idx, rows, cols, r2
-    # data = np.repeat(-2.7, row_data.shape[0])
-    # H = sparse.coo_matrix((data, (row_data, col_data)), shape=(num, num))
-    H = spmatrix.ll_mat(num, num)
-    H.put(-2.7, row_data, col_data)
+    data = np.repeat(-2.7, row_data.shape[0])
+    H = sparse.coo_matrix((data, (row_data, col_data)), shape=(num, num)).tocsc()
+    # H = spmatrix.ll_mat(num, num)
+    # H.put(-2.7, row_data, col_data)
 
     # print H
     # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
-    # sio.savemat('MATLAB/Hamvec2.mat', {'Hvec2': H.todense()}, oned_as='column')
+    sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
 
     # Help save memory
     garcol.collect()
@@ -691,7 +691,7 @@ def main():
     # Calculate Transmission
     # transmission(H, atoms)
     # dos()
-    dos_eig(H, atoms)
+    dos_negf(H, atoms)
     print "DoS complete"
 
     plt.show()
