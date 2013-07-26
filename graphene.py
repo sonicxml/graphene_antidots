@@ -426,15 +426,15 @@ def dos_eig(H, atoms):
     # rank = np.sum(s > 1e-12)
 
     print "Calculating eigenvalues"
-    vals = spla.eigsh(H, 500, which='BE', return_eigenvectors=False)
-    # vals = linalg.eigvals(H.todense())
+    # vals = spla.eigsh(H, 500, which='BE', return_eigenvectors=False)
+    vals = linalg.eigvals(H.todense())
     # vals = jdsym.jdsym(H, None, None, atoms, 1.2, 1e-12, atoms, krylov.qmrs)[1]
     del H
     Ne = np.size(vals)
     print "Ne = %s" % str(Ne)
     print "Eigenvalues calculated"
     # Number of bins
-    Nb = 20
+    Nb = 40
 
     # Min and Max Energy Values
     E_min = -10
@@ -468,8 +468,9 @@ def dos_eig(H, atoms):
 
     N = N / atoms
 
-    data = np.column_stack((E, N))
+    # data = np.column_stack((E, N))
     # np.savetxt('DataTxt/pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
+    np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
     # np.savetxt('DataTxt/pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
 
     plt.figure(2)
@@ -570,29 +571,33 @@ def v_generator(x_times, y_times):
     if coord2_creation or cut_type:
         x = coord.shape[0]
         k = 0
-        while k < x:
-            # Translate vector form of coord into xyz points of coord2
-            # For xy points, remove the ", 0" from the end of the lines
-            cx = coord[a, 0, 0] * x_dist + coord[a, 0, 2] * z_dist
-            cy = coord[a, 0, 1] * y_dist
+        for ii in xrange(antidot_num):
+            rect_x += ii * btw_dist
+            oppx += ii * btw_dist
+            while k < x:
+                # Translate vector form of coord into xyz points of coord2
+                # For xy points, remove the ", 0" from the end of the lines
+                cx = coord[a, 0, 0] * x_dist + coord[a, 0, 2] * z_dist
+                cy = coord[a, 0, 1] * y_dist
 
-            cut = False
-            # Check to see if antidot at that location
-            if (cut_type == 1) and (rect_x2 <= cx <= oppx and rect_y2 <= cy <= oppy):
-                coord = np.delete(coord, a, 0)
-                x = coord.shape[0]    # Redefine x since coord just got shortened
-                cut = True
-                k -= 1    # Prevent while loop from skipping a line
+                cut = False
+                # Check to see if antidot at that location
+                if (cut_type == 1) and (rect_x2 <= cx <= oppx and rect_y2 <= cy <= oppy):
+                    coord = np.delete(coord, a, 0)
+                    x = coord.shape[0]    # Redefine x since coord just got shortened
+                    cut = True
+                    k -= 1    # Prevent while loop from skipping a line
 
-            # Build coord2 - array of xyz atomic coordinates
-            if not cut:
-                if marker:
-                    coord2 = np.vstack((coord2, [cx, cy, 0]))
-                else:
-                    coord2 = [cx, cy, 0]
-                    marker = 1
+                if coord2_creation:
+                    # Build coord2 - array of xyz atomic coordinates
+                    if not cut:
+                        if marker:
+                            coord2 = np.vstack((coord2, [cx, cy, 0]))
+                        else:
+                            coord2 = [cx, cy, 0]
+                            marker = 1
 
-            k += 1
+                k += 1
 
         # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
         sio.savemat('MATLAB/coord.mat', {'coord': coord}, oned_as='column')
@@ -654,7 +659,7 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
 
     # print H
     # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
-    sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
+    # sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
 
     # Help save memory
     garcol.collect()
@@ -691,7 +696,7 @@ def main():
     # Calculate Transmission
     # transmission(H, atoms)
     # dos()
-    dos_negf(H, atoms)
+    dos_eig(H, atoms)
     print "DoS complete"
 
     plt.show()

@@ -9,7 +9,7 @@ Defines Graphene Lattice Constants, Units, Lattice Options (width, length, etc.)
 Antidot Options (size, position, etc)
 
 
-Trevin Gandhi, based off work by Frank Tseng
+Trevin Gandhi
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -65,8 +65,8 @@ nanometers = True   # True if parameter units are in nanometers, false if in Ang
 # General Lattice Parameters
 #
 
-width = 20             # Width of the unit cell
-height = 20              # Height of the unit cell
+width = 10             # Width of the unit cell
+height = 10              # Height of the unit cell
 num_x_trans = 0    # Number of times to translate unit cell along the x-axis
 num_y_trans = 0    # Number of times to translate unit cell along the y-axis
 cut_type = 0       # 0 if no antidots, 1 if rectangular
@@ -75,10 +75,12 @@ cut_type = 0       # 0 if no antidots, 1 if rectangular
 # Rectangular Antidot Parameters
 #
 
+antidot_num = 2   # Number of antidots
 rect_x = 1        # x-coordinate of the bottom left corner of the antidot
 rect_y = 1        # y-coordinate of the bottom left corner of the antidot
 rect_h = 5        # Height of the antidot
 rect_w = 5        # Width of the antidot
+btw_dist = 5      # Horizontal distance between antidots
 
 #
 # Data Options
