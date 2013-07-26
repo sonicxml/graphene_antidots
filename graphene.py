@@ -65,6 +65,7 @@ np.use_fastnumpy = True
 # TODO: LOW PRIORITY: Define x_dist, y_dist, and z_dist for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
 # TODO: Could just use floor() instead of ceil() in dos()
+# TODO: Python convention is global constants are all caps
 
 # Module options to possibly add: PyPy, numexpr, Theano, pytables, cython, pysparse, numba, vectorization
 # http://technicaldiscovery.blogspot.com/2011/06/speeding-up-python-numpy-cython-and.html
@@ -482,6 +483,7 @@ def dos_eig(H, atoms):
     plt.draw()
 
 
+@autojit
 def v_generator(x_times, y_times):
     """
     Creates a 3-dimensional array (n x 0 x 2 - since the index starts at 0) 'coord'
@@ -556,33 +558,26 @@ def v_generator(x_times, y_times):
 
     marker = 0
     if cut_type == 1:
-        # Convert to Angstroms
-        if nanometers:
-            rect_x2, rect_y2, rect_h2, rect_w2 = rect_x, rect_y, rect_h, rect_w
-            rect_x2 *= 10
-            rect_y2 *= 10
-            rect_h2 *= 10
-            rect_w2 *= 10
-
+        rect_x2 = rect_x
         # Get upper left Y value and bottom right x value of rectangle
-        oppx = rect_x2 + rect_w2
-        oppy = rect_y2 + rect_h2
+        opp_x = rect_x2 + rect_w
+        opp_y = rect_y + rect_h
 
     if coord2_creation or cut_type:
         x = coord.shape[0]
         k = 0
         for ii in xrange(antidot_num):
-            rect_x += ii * btw_dist + rect_w
-            oppx += ii * btw_dist + rect_w
+            rect_x2 += ii * btw_dist + rect_w
+            opp_x += ii * btw_dist + rect_w
             while k < x:
                 # Translate vector form of coord into xyz points of coord2
                 # For xy points, remove the ", 0" from the end of the lines
-                cx = coord[a, 0, 0] * x_dist + coord[a, 0, 2] * z_dist
-                cy = coord[a, 0, 1] * y_dist
+                cx = coord[k, 0, 0] * x_dist + coord[k, 0, 2] * z_dist
+                cy = coord[k, 0, 1] * y_dist
 
                 cut = False
                 # Check to see if antidot at that location
-                if (cut_type == 1) and (rect_x2 <= cx <= oppx and rect_y2 <= cy <= oppy):
+                if (cut_type == 1) and (rect_x2 <= cx <= opp_x and rect_y <= cy <= opp_y):
                     coord = np.delete(coord, a, 0)
                     x = coord.shape[0]    # Redefine x since coord just got shortened
                     cut = True
@@ -600,12 +595,12 @@ def v_generator(x_times, y_times):
                 k += 1
 
         # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
-        sio.savemat('MATLAB/coord.mat', {'coord': coord}, oned_as='column')
+        # sio.savemat('MATLAB/coord.mat', {'coord': coord}, oned_as='column')
 
         # Save xyz coordinates to graphenecoordinates.txt
-        np.savetxt('DataTxt/graphenecoordinates.txt', coord2, delimiter='\t', fmt='%f')
-
-        return coord, coord2, x_atoms, y_atoms
+        # np.savetxt('DataTxt/graphenecoordinates.txt', coord2, delimiter='\t', fmt='%f')
+        if coord2_creation:
+            return coord, coord2, x_atoms, y_atoms
 
     return coord, x_atoms, y_atoms
 
