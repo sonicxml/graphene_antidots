@@ -572,8 +572,8 @@ def v_generator(x_times, y_times):
         x = coord.shape[0]
         k = 0
         for ii in xrange(antidot_num):
-            rect_x += ii * btw_dist
-            oppx += ii * btw_dist
+            rect_x += ii * btw_dist + rect_w
+            oppx += ii * btw_dist + rect_w
             while k < x:
                 # Translate vector form of coord into xyz points of coord2
                 # For xy points, remove the ", 0" from the end of the lines

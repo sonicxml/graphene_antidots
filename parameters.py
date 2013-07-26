@@ -79,7 +79,7 @@ antidot_num = 2   # Number of antidots
 rect_x = 1        # x-coordinate of the bottom left corner of the antidot
 rect_y = 1        # y-coordinate of the bottom left corner of the antidot
 rect_h = 5        # Height of the antidot
-rect_w = 5        # Width of the antidot
+rect_w = 2        # Width of the antidot
 btw_dist = 5      # Horizontal distance between antidots
 
 #
