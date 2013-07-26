@@ -65,11 +65,11 @@ nanometers = True   # True if parameter units are in nanometers, false if in Ang
 # General Lattice Parameters
 #
 
-width = 10             # Width of the unit cell
-height = 10              # Height of the unit cell
+width = 5             # Width of the unit cell
+height = 5              # Height of the unit cell
 num_x_trans = 0    # Number of times to translate unit cell along the x-axis
 num_y_trans = 0    # Number of times to translate unit cell along the y-axis
-cut_type = 0       # 0 if no antidots, 1 if rectangular
+cut_type = 1       # 0 if no antidots, 1 if rectangular
 
 #
 # Rectangular Antidot Parameters
@@ -78,13 +78,28 @@ cut_type = 0       # 0 if no antidots, 1 if rectangular
 antidot_num = 2   # Number of antidots
 rect_x = 1        # x-coordinate of the bottom left corner of the antidot
 rect_y = 1        # y-coordinate of the bottom left corner of the antidot
-rect_h = 5        # Height of the antidot
-rect_w = 2        # Width of the antidot
-btw_dist = 5      # Horizontal distance between antidots
+rect_h = 3        # Height of the antidot
+rect_w = .5        # Width of the antidot
+btw_dist = 2      # Horizontal distance between antidots
 
 #
 # Data Options
 #
 
-plot_option = False # Plot the graphene sheet
-coord2_creation = False # Create the coord2 array?
+# Note: Must have coord2_creation as True for plot_option to work
+plot_option = True          # Plot the graphene sheet
+coord2_creation = True     # Create the coord2 array?
+
+
+#
+# Convert nanometers to Angstroms
+#
+
+if nanometers and distance:
+    width *= 10
+    height *= 10
+    rect_x *= 10
+    rect_y *= 10
+    rect_h *= 10
+    rect_w *= 10
+    btw_dist *= 10

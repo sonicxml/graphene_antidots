@@ -22,22 +22,23 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 MA 02110-1301, USA.
 """
 
-from __future__ import division     # Use Python3 division
+from __future__ import division, print_function     # Use Python3 division
 import gc as garcol                 # Used for garbage collection to help save memory
 
 import matplotlib.pyplot as plt     # Matplotlib
 import numpy as np                  # NumPy
 import scipy.sparse as sparse       # Used for sparse matrices
-import scipy.io as sio              # Used for saving arrays as MATLAB files
 from scipy import linalg            # Linear Algebra Functions
 import scipy.sparse.linalg as spla
 from numba.decorators import autojit
 from parameters import *
 from progressbar import ProgressBar, Percentage, Bar
-from pysparse.sparse import spmatrix
-from pysparse.itsolvers import krylov
-from pysparse.eigen import jdsym
 np.use_fastnumpy = True
+
+# import scipy.io as sio              # Used for saving arrays as MATLAB files
+# from pysparse.sparse import spmatrix
+# from pysparse.itsolvers import krylov
+# from pysparse.eigen import jdsym
 
 
 #
@@ -57,11 +58,8 @@ np.use_fastnumpy = True
 
 # To-Do list:
 # TODO: Clean up code according to Python standards - STARTED
-# TODO: Properly vectorize coordinate generator - NOT STARTED
-# TODO: Possibly create "interaction" array defining all tight binding interactions, then generate Hamiltonian - NS
-# TODO: Finalize hamiltonian and transmission calculators - MOSTLY DONE, NEED TO CHECK ANTIDOT CALCULATIONS
-# TODO: Possibly use sparse matrix calculations for transmission - MOSTLY DONE, STILL A WIP
-# TODO: Possibly use Cython to optimize calculations and improve calculation speed - NOT STARTED
+# TODO: Vectorize coordinate generator - NOT STARTED
+# TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
 # TODO: LOW PRIORITY: Define x_dist, y_dist, and z_dist for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
 # TODO: Could just use floor() instead of ceil() in dos()
@@ -102,20 +100,20 @@ def main_generator():
         x_times = round(x_limit // x_dist)
         y_times = round(y_limit / y_dist)
 
-        print "x_limit: %s" % str(x_limit)
-        print "y_limit: %s" % str(y_limit)
+        print("x_limit: %s" % str(x_limit))
+        print("y_limit: %s" % str(y_limit))
         if x_diff:
-            print "x_diff: %s" % str(x_diff)
+            print("x_diff: %s" % str(x_diff))
         if y_diff:
-            print "y_diff: %s" % str(y_diff)
-        print "x_dist: %s" % str(x_dist)
-        print "y_dist: %s" % str(y_dist)
+            print("y_diff: %s" % str(y_diff))
+        print("x_dist: %s" % str(x_dist))
+        print("y_dist: %s" % str(y_dist))
     else:
         x_times, y_times = x, y
 
-    print "x_times: %s" % str(x_times)
-    print "y_times: %s" % str(y_times)
-    print "Beginning Coordinate Generation"
+    print("x_times: %s" % str(x_times))
+    print("y_times: %s" % str(y_times))
+    print("Beginning Coordinate Generation")
     if coord2_creation:
         (coord, coord2, x_atoms, y_atoms) = v_generator(x_times, y_times)
         return coord, coord2, x_atoms, y_atoms
@@ -146,8 +144,8 @@ def transmission(H, atoms):
     atomsh = atoms // 2
     if atoms % 2 != 0:
         atoms -= 1
-    print str(atoms)
-    print str(atomsh)
+    print(str(atoms))
+    print(str(atomsh))
 
     # Make Hon and Hoff each half of H
     H = np.asmatrix(H)                        # Convert H to a matrix
@@ -194,7 +192,7 @@ def transmission(H, atoms):
             tmp = I - t * tt - tt * t
             if (1 / (np.linalg.cond(tmp))) < etan:
                 g = 0
-                print "1: tmp NaN or Inf occurred, return forced. Kp: " + str(kp)
+                print("1: tmp NaN or Inf occurred, return forced. Kp: " + str(kp))
                 return g
 
             tmp = linalg.inv(tmp)                   # Inverse part of Eq. 12
@@ -205,14 +203,14 @@ def transmission(H, atoms):
 
             if np.isnan(change).sum() or np.isinf(change).sum():
                 g = 0
-                print "2: tmp NaN or Inf occurred, return forced. Kp: " + str(kp)
+                print("2: tmp NaN or Inf occurred, return forced. Kp: " + str(kp))
                 return g
 
         g = (alpha + beta * T)
 
         if (1 / (np.linalg.cond(g))) < etan:
             g = 0
-            print "3: tmp NaN or Inf occured, return forced. Kp: " + str(kp)
+            print("3: tmp NaN or Inf occured, return forced. Kp: " + str(kp))
             return g
 
         g = linalg.inv(g)
@@ -220,7 +218,7 @@ def transmission(H, atoms):
 
         if gn.max() > 0.001 or counter > 99:
             g = 0
-            print "4: Attention! not correct sgf. Kp: " + str(kp)
+            print("4: Attention! not correct sgf. Kp: " + str(kp))
             return g
 
         # Help save memory
@@ -256,7 +254,7 @@ def transmission(H, atoms):
 
     for kp in xrange(Ne):
         EE = E[kp]
-        print str(EE)
+        print(str(EE))
 
         alpha = sparse.coo_matrix((EE + 1j * eta) * I - Hon)
         beta = sparse.coo_matrix((EE + 1j * eta) * I - Hoff)
@@ -388,11 +386,11 @@ def dos_negf(H, atoms):
 
     N = np.zeros(Ne)                     # Initialize N
 
-    print np.array_equal(H, H.H)         # Check if Hamiltonian is a Hermitian matrix
+    print(np.array_equal(H, H.H))         # Check if Hamiltonian is a Hermitian matrix
 
     for kp in xrange(Ne):
         EE = E[kp]
-        print str(EE)
+        print(str(EE))
 
         G = np.asmatrix(spla.inv((EE + 1j * eta) * I - H))
 
@@ -426,14 +424,14 @@ def dos_eig(H, atoms):
     # s = spla.svds(H, )[1]
     # rank = np.sum(s > 1e-12)
 
-    print "Calculating eigenvalues"
+    print("Calculating eigenvalues")
     # vals = spla.eigsh(H, 500, which='BE', return_eigenvectors=False)
     vals = linalg.eigvals(H.todense())
     # vals = jdsym.jdsym(H, None, None, atoms, 1.2, 1e-12, atoms, krylov.qmrs)[1]
     del H
     Ne = np.size(vals)
-    print "Ne = %s" % str(Ne)
-    print "Eigenvalues calculated"
+    print("Ne = %s" % str(Ne))
+    print("Eigenvalues calculated")
     # Number of bins
     Nb = 40
 
@@ -548,9 +546,9 @@ def v_generator(x_times, y_times):
                 marker = 1
         pbar.update(j2 + 1)
     pbar.finish()
-    print np.shape(coord)
-    print "Number of atoms along the x-axis: %s" % str(x_atoms)
-    print "Number of atoms along the y-axis: %s" % str(y_atoms)
+    print(np.shape(coord))
+    print("Number of atoms along the x-axis: %s" % str(x_atoms))
+    print("Number of atoms along the y-axis: %s" % str(y_atoms))
 
     #
     # Antidot Generator
@@ -612,13 +610,13 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     Only does nearest-neighbor calculations
     """
 
-    print "Start Ham calc"
+    print("Start Ham calc")
     max_size = 16000     # Keep arrays at max size of around 2 GB. Also limits lattice to ~1969 nm.
     diff = y_atoms if build_hor else x_atoms
     # if diff == 0:
     #     diff += 1
     num = coord.shape[0]    # Number of atoms in the lattice
-    print "num = " + str(num)
+    print("num = " + str(num))
 
     if num / y_atoms <= max_size:
         chunks = 1
@@ -659,7 +657,7 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     # Help save memory
     garcol.collect()
 
-    print "End Ham calc"
+    print("End Ham calc")
 
     return H, num
 
@@ -667,24 +665,24 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
 def main():
     # Check to make sure garbage collection is enabled
     garcol_boolean = garcol.isenabled()
-    print garcol_boolean
+    print(garcol_boolean)
 
     # Generate Coordinates
     if coord2_creation:
         (coord, coord2, x_atoms, y_atoms) = main_generator()
     else:
         (coord, x_atoms, y_atoms) = main_generator()
-    print "main_generator() complete"
+    print("main_generator() complete")
 
     # Plot graphene
     if coord2_creation and plot_option:
         plot_graphene(coord2)
-        print "plot_graphene() complete"
+        print("plot_graphene() complete")
         del coord2
 
     # Generate Hamiltonian
     (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
-    print "v_hamiltonian() complete"
+    print("v_hamiltonian() complete")
     del coord
 
     # print H
@@ -692,7 +690,7 @@ def main():
     # transmission(H, atoms)
     # dos()
     dos_eig(H, atoms)
-    print "DoS complete"
+    print("DoS complete")
 
     plt.show()
 
