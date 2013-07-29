@@ -32,7 +32,7 @@ MA 02110-1301, USA.
 #
 
 armchair = True      # True if armchair orientation, false if zigzag
-chain = False         # Is it a chain?
+chain = True         # Is it a chain?
 build_hor = True     # True = upwards then horizontal, False = horizontal then upwards
 a = 1.42             # Carbon-carbon bond length in Angstroms
 # (1.42 is an average of carbon single bonds (C-C) and carbon double bonds (C=C))
@@ -58,15 +58,15 @@ else:
 # Units
 #
 
-distance = True     # True if x and y are distances, False if they are numbers of atoms
-nanometers = True   # True if parameter units are in nanometers, false if in Angstroms
+distance = False     # True if x and y are distances, False if they are numbers of atoms
+nanometers = False   # True if parameter units are in nanometers, false if in Angstroms
 
 #
 # General Lattice Parameters
 #
 
-width = 5             # Width of the unit cell
-height = 5              # Height of the unit cell
+width = 10             # Width of the unit cell
+height = 1              # Height of the unit cell
 num_x_trans = 0    # Number of times to translate unit cell along the x-axis
 num_y_trans = 0    # Number of times to translate unit cell along the y-axis
 cut_type = 1       # 0 if no antidots, 1 if rectangular
@@ -75,9 +75,9 @@ cut_type = 1       # 0 if no antidots, 1 if rectangular
 # Rectangular Antidot Parameters
 #
 
-antidot_num = 2   # Number of antidots
+antidot_num = 1   # Number of antidots
 rect_x = 1        # x-coordinate of the bottom left corner of the antidot
-rect_y = 1        # y-coordinate of the bottom left corner of the antidot
+rect_y = 0        # y-coordinate of the bottom left corner of the antidot
 rect_h = 3        # Height of the antidot
 rect_w = .5        # Width of the antidot
 btw_dist = 2      # Horizontal distance between antidots

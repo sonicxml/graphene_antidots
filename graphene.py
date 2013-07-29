@@ -81,11 +81,6 @@ def main_generator():
     x_diff, y_diff = None, None
     x, y = width, height
     if distance:
-        # If x and y are in nanometers, convert to angstroms
-        if nanometers:
-            x *= 10
-            y *= 10
-
         # Limits for the loops
         # x_limit
         if x > dw_leg:
@@ -481,7 +476,7 @@ def dos_eig(H, atoms):
     plt.draw()
 
 
-@autojit
+# @autojit
 def v_generator(x_times, y_times):
     """
     Creates a 3-dimensional array (n x 0 x 2 - since the index starts at 0) 'coord'
@@ -565,38 +560,50 @@ def v_generator(x_times, y_times):
         x = coord.shape[0]
         k = 0
         for ii in xrange(antidot_num):
-            rect_x2 += ii * btw_dist + rect_w
-            opp_x += ii * btw_dist + rect_w
-            while k < x:
-                # Translate vector form of coord into xyz points of coord2
-                # For xy points, remove the ", 0" from the end of the lines
-                cx = coord[k, 0, 0] * x_dist + coord[k, 0, 2] * z_dist
-                cy = coord[k, 0, 1] * y_dist
+            rect_x2 += ii * btw_dist
+            opp_x += ii * btw_dist
 
-                cut = False
-                # Check to see if antidot at that location
-                if (cut_type == 1) and (rect_x2 <= cx <= opp_x and rect_y <= cy <= opp_y):
-                    coord = np.delete(coord, a, 0)
-                    x = coord.shape[0]    # Redefine x since coord just got shortened
-                    cut = True
-                    k -= 1    # Prevent while loop from skipping a line
-
+            coord3 = ((coord[:, 0, 0] * x_dist + coord[:, 0, 2] * z_dist).reshape(coord.shape[0], 1))
+            coord4 = (coord[:, 0, 1] * y_dist).reshape(coord.shape[0], 1)
+            if cut_type:
+                idx = ((coord3 <= rect_x2) | (coord3 >= opp_x)) & ((coord4 <= rect_y) | (coord4 >= opp_y))
+                n = np.count_nonzero(idx)
+                coord = coord[idx]
                 if coord2_creation:
-                    # Build coord2 - array of xyz atomic coordinates
-                    if not cut:
-                        if marker:
-                            coord2 = np.vstack((coord2, [cx, cy, 0]))
-                        else:
-                            coord2 = [cx, cy, 0]
-                            marker = 1
+                    coord2 = np.hstack((coord3[idx].reshape(n, 1), coord4[idx].reshape(n, 1)))
+            elif coord2_creation:
+                coord2 = np.hstack((coord3, coord4))
 
-                k += 1
+            # while k < x:
+            #     # Translate vector form of coord into xyz points of coord2
+            #     # For xy points, remove the ", 0" from the end of the lines
+            #     cx = coord[k, 0, 0] * x_dist + coord[k, 0, 2] * z_dist
+            #     cy = coord[k, 0, 1] * y_dist
+            #
+            #     cut = False
+            #     # Check to see if antidot at that location
+            #     if (cut_type == 1) and (rect_x2 <= cx <= opp_x and rect_y <= cy <= opp_y):
+            #         coord = np.delete(coord, a, 0)
+            #         x = coord.shape[0]    # Redefine x since coord just got shortened
+            #         cut = True
+            #         k -= 1    # Prevent while loop from skipping a line
+            #
+            #     if coord2_creation:
+            #         # Build coord2 - array of xyz atomic coordinates
+            #         if not cut:
+            #             if marker:
+            #                 coord2 = np.vstack((coord2, [cx, cy, 0]))
+            #             else:
+            #                 coord2 = [cx, cy, 0]
+            #                 marker = 1
+            #
+            #     k += 1
 
         # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
-        # sio.savemat('MATLAB/coord.mat', {'coord': coord}, oned_as='column')
+        # sio.savemat('coord.mat', {'coord': coord}, oned_as='column')
 
         # Save xyz coordinates to graphenecoordinates.txt
-        # np.savetxt('DataTxt/graphenecoordinates.txt', coord2, delimiter='\t', fmt='%f')
+        np.savetxt('graphenecoordinates.txt', coord2, delimiter='\t', fmt='%f')
         if coord2_creation:
             return coord, coord2, x_atoms, y_atoms
 
