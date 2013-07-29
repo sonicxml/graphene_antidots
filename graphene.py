@@ -31,8 +31,9 @@ import scipy.sparse as sparse       # Used for sparse matrices
 from scipy import linalg            # Linear Algebra Functions
 import scipy.sparse.linalg as spla
 from numba.decorators import autojit
-from parameters import *
 from progressbar import ProgressBar, Percentage, Bar
+
+from parameters import *
 np.use_fastnumpy = True
 
 # import scipy.io as sio              # Used for saving arrays as MATLAB files
@@ -549,7 +550,6 @@ def v_generator(x_times, y_times):
     # Antidot Generator
     #
 
-    marker = 0
     if cut_type == 1:
         rect_x2 = rect_x
         # Get upper left Y value and bottom right x value of rectangle
@@ -557,47 +557,21 @@ def v_generator(x_times, y_times):
         opp_y = rect_y + rect_h
 
     if coord2_creation or cut_type:
-        x = coord.shape[0]
-        k = 0
         for ii in xrange(antidot_num):
-            rect_x2 += ii * btw_dist
-            opp_x += ii * btw_dist
+            rect_x2 += ii * (btw_dist + rect_w)
+            opp_x += ii * (btw_dist + rect_w)
 
             coord3 = ((coord[:, 0, 0] * x_dist + coord[:, 0, 2] * z_dist).reshape(coord.shape[0], 1))
             coord4 = (coord[:, 0, 1] * y_dist).reshape(coord.shape[0], 1)
+
             if cut_type:
                 idx = ((coord3 <= rect_x2) | (coord3 >= opp_x)) & ((coord4 <= rect_y) | (coord4 >= opp_y))
                 n = np.count_nonzero(idx)
-                coord = coord[idx]
+                coord = coord[idx].reshape(n, 1, 3)
                 if coord2_creation:
                     coord2 = np.hstack((coord3[idx].reshape(n, 1), coord4[idx].reshape(n, 1)))
             elif coord2_creation:
                 coord2 = np.hstack((coord3, coord4))
-
-            # while k < x:
-            #     # Translate vector form of coord into xyz points of coord2
-            #     # For xy points, remove the ", 0" from the end of the lines
-            #     cx = coord[k, 0, 0] * x_dist + coord[k, 0, 2] * z_dist
-            #     cy = coord[k, 0, 1] * y_dist
-            #
-            #     cut = False
-            #     # Check to see if antidot at that location
-            #     if (cut_type == 1) and (rect_x2 <= cx <= opp_x and rect_y <= cy <= opp_y):
-            #         coord = np.delete(coord, a, 0)
-            #         x = coord.shape[0]    # Redefine x since coord just got shortened
-            #         cut = True
-            #         k -= 1    # Prevent while loop from skipping a line
-            #
-            #     if coord2_creation:
-            #         # Build coord2 - array of xyz atomic coordinates
-            #         if not cut:
-            #             if marker:
-            #                 coord2 = np.vstack((coord2, [cx, cy, 0]))
-            #             else:
-            #                 coord2 = [cx, cy, 0]
-            #                 marker = 1
-            #
-            #     k += 1
 
         # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
         # sio.savemat('coord.mat', {'coord': coord}, oned_as='column')

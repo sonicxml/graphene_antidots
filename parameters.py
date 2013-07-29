@@ -75,11 +75,11 @@ cut_type = 1       # 0 if no antidots, 1 if rectangular
 # Rectangular Antidot Parameters
 #
 
-antidot_num = 1   # Number of antidots
+antidot_num = 2   # Number of antidots
 rect_x = 1        # x-coordinate of the bottom left corner of the antidot
 rect_y = 0        # y-coordinate of the bottom left corner of the antidot
 rect_h = 3        # Height of the antidot
-rect_w = .5        # Width of the antidot
+rect_w = 1        # Width of the antidot
 btw_dist = 2      # Horizontal distance between antidots
 
 #
