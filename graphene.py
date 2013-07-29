@@ -36,12 +36,6 @@ from progressbar import ProgressBar, Percentage, Bar
 from parameters import *
 np.use_fastnumpy = True
 
-# import scipy.io as sio              # Used for saving arrays as MATLAB files
-# from pysparse.sparse import spmatrix
-# from pysparse.itsolvers import krylov
-# from pysparse.eigen import jdsym
-
-
 #
 # Getting Started
 #
@@ -59,8 +53,10 @@ np.use_fastnumpy = True
 
 # To-Do list:
 # TODO: Clean up code according to Python standards - STARTED
-# TODO: Vectorize coordinate generator - NOT STARTED
+# TODO: Vectorize coordinate generator - STARTED
 # TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
+# TODO: Add summation method for DoS Calculation - STARTED
+# TODO: LOWER PRIORITY: Use unit vectors for coordinate generation - NOT STARTED
 # TODO: LOW PRIORITY: Define X_DIST, Y_DIST, and Z_DIST for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
 
@@ -304,8 +300,6 @@ def dos():
     Calculate the theoretical density of states of graphene using the "binning" method
     """
 
-    t = 2.7
-
     Nb = 101                # Number of bins
     Nk = 1001               # Number of k vectors
 
@@ -328,7 +322,7 @@ def dos():
     for i in kx:
         for j in ky:
             # Energy Dispersion - Calculate positive and negative
-            e = t * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * A) / 2) *
+            e = T * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * A) / 2) *
                     np.cos((j * A) / 2) + 4 * (np.cos((j * A) / 2)) ** 2)
             e2 = -e
 
@@ -408,30 +402,22 @@ def dos_eig(H, atoms):
     Calculate the density of states across the graphene sheet using an eigenvalue solver
     """
 
-    # H = sparse.dia_matrix(H)             # Convert H to a matrix - would it save mem to have non sparse H only?
-
-    # Check if Hamiltonian is a Hermitian matrix
-    #  print "Is H Hermitian? %s" % str(np.array_equal(H.todense(), H.todense().H))
-
-    # s = spla.svds(H, )[1]
-    # rank = np.sum(s > 1e-12)
-
-    t = 2.7
-
     print("Calculating eigenvalues")
-    # vals = spla.eigsh(H, 500, which='BE', return_eigenvectors=False)
+
     vals = linalg.eigvals(H.todense())
-    # vals = jdsym.jdsym(H, None, None, atoms, 1.2, 1e-12, atoms, krylov.qmrs)[1]
     del H
+
     Ne = np.size(vals)
     print("Ne = %s" % str(Ne))
+
     print("Eigenvalues calculated")
+
     # Number of bins
     Nb = 40
 
     # Min and Max Energy Values
-    E_min = -3 * t
-    E_max = 3 * t
+    E_min = -3 * T
+    E_max = 3 * T
 
     E = np.linspace(E_min, E_max, Nb)    # Energy Levels to calculate transmission at
 
@@ -439,34 +425,12 @@ def dos_eig(H, atoms):
 
     vals = np.real(vals)                 # Disregard imaginary part - eigenvalues are 'a + 0i' form
 
-    # Binning Method
-    # Energy increment
-    # inc = (E_max - E_min) / Nb
-    # for e in vals:
-    #     e2 = -e
-    #
-    #     # Find bins
-    #     b = np.floor((e - E_min) / inc)
-    #     b2 = np.floor((e2 - E_min) / inc)
-    #
-    #     # Tally bins (-1 because Python indexing starts at 0)
-    #     try:
-    #         N[b] += 1
-    #     except IndexError:
-    #         pass
-    #     try:
-    #         N[b2] += 1
-    #     except IndexError:
-    #         pass
-    # N = N / atoms
-
     # Summation Method
     gamma = 0.05
     for e in E:
         N[e] = (1 / atoms) * np.sum(gamma / (((e - vals) ** 2) + (gamma ** 2)))
 
     # data = np.column_stack((E, N))
-    # np.savetxt('DataTxt/pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
     np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
     # np.savetxt('DataTxt/pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
 
@@ -601,8 +565,6 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     print("Start Ham calc")
     max_size = 16000     # Keep arrays at max size of around 2 GB. Also limits lattice to ~1969 nm.
     diff = y_atoms if BUILD_HOR else x_atoms
-    # if diff == 0:
-    #     diff += 1
     num = coord.shape[0]    # Number of atoms in the lattice
     print("num = " + str(num))
 
@@ -635,8 +597,6 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     del idx, rows, cols, r2
     data = np.repeat(-2.7, row_data.shape[0])
     H = sparse.coo_matrix((data, (row_data, col_data)), shape=(num, num)).tocsc()
-    # H = spmatrix.ll_mat(num, num)
-    # H.put(-2.7, row_data, col_data)
 
     # print H
     # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
@@ -672,10 +632,7 @@ def main():
     (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
     del coord
 
-    # print H
-    # Calculate Transmission
-    # transmission(H, atoms)
-    # dos()
+    # Calculate Density of States
     dos_eig(H, atoms)
     print("DoS complete")
 

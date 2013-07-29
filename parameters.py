@@ -36,6 +36,7 @@ CHAIN = True         # Is it a chain?
 BUILD_HOR = True     # True = upwards then horizontal, False = horizontal then upwards
 A = 1.42             # Carbon-carbon bond length in Angstroms
 # (1.42 is an average of carbon single bonds (C-C) and carbon double bonds (C=C))
+T = 2.7              # Tight-binding nearest-neighbor hopping parameter
 
 if ARMCHAIR:
     W_LEG = 0.71      # Horizontal leg: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
@@ -92,7 +93,7 @@ COORD2_CREATION = True     # Create the coord2 array?
 
 
 #
-# Convert nanometers to Angstroms
+# Convert nanometers to angstroms
 #
 
 if NANOMETERS and DISTANCE:
