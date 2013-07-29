@@ -63,7 +63,6 @@ np.use_fastnumpy = True
 # TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
 # TODO: LOW PRIORITY: Define X_DIST, Y_DIST, and Z_DIST for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
-# TODO: Could just use floor() instead of ceil() in dos()
 
 # Module options to possibly add: PyPy, numexpr, Theano, pytables, cython, pysparse, numba, vectorization
 # http://technicaldiscovery.blogspot.com/2011/06/speeding-up-python-numpy-cython-and.html
@@ -334,16 +333,16 @@ def dos():
             e2 = -e
 
             # Find bins
-            b = np.ceil((e - E_min) / inc)
-            b2 = np.ceil((e2 - E_min) / inc)
+            b = np.floor((e - E_min) / inc)
+            b2 = np.floor((e2 - E_min) / inc)
 
             # Tally bins (-1 because Python indexing starts at 0)
             try:
-                DoS[b - 1] += 1
+                DoS[b] += 1
             except IndexError:
                 pass
             try:
-                DoS[b2 - 1] += 1
+                DoS[b2] += 1
             except IndexError:
                 pass
                 
@@ -447,16 +446,16 @@ def dos_eig(H, atoms):
     #     e2 = -e
     #
     #     # Find bins
-    #     b = np.ceil((e - E_min) / inc)
-    #     b2 = np.ceil((e2 - E_min) / inc)
+    #     b = np.floor((e - E_min) / inc)
+    #     b2 = np.floor((e2 - E_min) / inc)
     #
     #     # Tally bins (-1 because Python indexing starts at 0)
     #     try:
-    #         N[b - 1] += 1
+    #         N[b] += 1
     #     except IndexError:
     #         pass
     #     try:
-    #         N[b2 - 1] += 1
+    #         N[b2] += 1
     #     except IndexError:
     #         pass
     # N = N / atoms
