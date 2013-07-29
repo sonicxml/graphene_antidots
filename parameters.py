@@ -31,75 +31,75 @@ MA 02110-1301, USA.
 # Graphene Lattice Constants
 #
 
-armchair = True      # True if armchair orientation, false if zigzag
-chain = True         # Is it a chain?
-build_hor = True     # True = upwards then horizontal, False = horizontal then upwards
-a = 1.42             # Carbon-carbon bond length in Angstroms
+ARMCHAIR = True      # True if armchair orientation, false if zigzag
+CHAIN = True         # Is it a chain?
+BUILD_HOR = True     # True = upwards then horizontal, False = horizontal then upwards
+A = 1.42             # Carbon-carbon bond length in Angstroms
 # (1.42 is an average of carbon single bonds (C-C) and carbon double bonds (C=C))
 
-if armchair:
-    w_leg = 0.71      # Horizontal leg: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
-    dw_leg = 2.84     # w_leg * 4 (width of hexagon)
-    h_leg = 1.2306    # Vertical leg: w_leg * sqrt(3) (for the other leg of the triangle)
-    dh_leg = 2.4612   # h_leg * 2  (height of hexagon)
-    x_dist = 2.13     # 3a/2
-    y_dist = h_leg    # (sqrt(3)*a)/2
-    z_dist = a        # Distance between two points in the unit cell
-    if chain:
-        x_dist = 1.42
-        y_dist = 1.42
+if ARMCHAIR:
+    W_LEG = 0.71      # Horizontal leg: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
+    DW_LEG = 2.84     # W_LEG * 4 (width of hexagon)
+    H_LEG = 1.2306    # Vertical leg: W_LEG * sqrt(3) (for the other leg of the triangle)
+    DH_LEG = 2.4612   # H_LEG * 2  (height of hexagon)
+    X_DIST = 2.13     # 3a/2
+    Y_DIST = H_LEG    # (sqrt(3)*a)/2
+    Z_DIST = A        # Distance between two points in the unit cell
+    if CHAIN:
+        X_DIST = 1.42
+        Y_DIST = 1.42
 else:
-    h_leg = 0.71      # Vertical leg: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
-    dh_leg = 2.84     # h_leg * 4 (width of hexagon)
-    w_leg = 1.2306    # Horizontal leg: h_leg * sqrt(3) (for the other leg of the triangle)
-    dw_leg = 2.4612   # w_leg * 2  (height of hexagon)
+    H_LEG = 0.71      # Vertical LEG: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
+    DH_LEG = 2.84     # H_LEG * 4 (width of hexagon)
+    W_LEG = 1.2306    # Horizontal LEG: H_LEG * sqrt(3) (for the other LEG of the triangle)
+    DW_LEG = 2.4612   # W_LEG * 2  (height of hexagon)
 
 #
 # Units
 #
 
-distance = False     # True if x and y are distances, False if they are numbers of atoms
-nanometers = False   # True if parameter units are in nanometers, false if in Angstroms
+DISTANCE = False     # True if x and y are distances, False if they are numbers of atoms
+NANOMETERS = False   # True if parameter units are in nanometers, false if in Angstroms
 
 #
 # General Lattice Parameters
 #
 
-width = 10             # Width of the unit cell
-height = 1              # Height of the unit cell
-num_x_trans = 0    # Number of times to translate unit cell along the x-axis
-num_y_trans = 0    # Number of times to translate unit cell along the y-axis
-cut_type = 1       # 0 if no antidots, 1 if rectangular
+WIDTH = 10             # Width of the unit cell
+HEIGHT = 1              # Height of the unit cell
+NUM_X_TRANS = 0    # Number of times to translate unit cell along the x-axis
+NUM_Y_TRANS = 0    # Number of times to translate unit cell along the y-axis
+CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
 
 #
 # Rectangular Antidot Parameters
 #
 
-antidot_num = 2   # Number of antidots
-rect_x = 1        # x-coordinate of the bottom left corner of the antidot
-rect_y = 0        # y-coordinate of the bottom left corner of the antidot
-rect_h = 3        # Height of the antidot
-rect_w = 1        # Width of the antidot
-btw_dist = 2      # Horizontal distance between antidots
+ANTIDOT_NUM = 2   # Number of antidots
+RECT_X = 1        # x-coordinate of the bottom left corner of the antidot
+RECT_Y = 0        # y-coordinate of the bottom left corner of the antidot
+RECT_H = 3        # Height of the antidot
+RECT_W = 1        # Width of the antidot
+BTW_DIST = 2      # Horizontal distance between antidots
 
 #
 # Data Options
 #
 
-# Note: Must have coord2_creation as True for plot_option to work
-plot_option = True          # Plot the graphene sheet
-coord2_creation = True     # Create the coord2 array?
+# Note: Must have COORD2_CREATION as True for PLOT_OPTION to work
+PLOT_OPTION = True          # Plot the graphene sheet
+COORD2_CREATION = True     # Create the coord2 array?
 
 
 #
 # Convert nanometers to Angstroms
 #
 
-if nanometers and distance:
-    width *= 10
-    height *= 10
-    rect_x *= 10
-    rect_y *= 10
-    rect_h *= 10
-    rect_w *= 10
-    btw_dist *= 10
+if NANOMETERS and DISTANCE:
+    WIDTH *= 10
+    HEIGHT *= 10
+    RECT_X *= 10
+    RECT_Y *= 10
+    RECT_H *= 10
+    RECT_W *= 10
+    BTW_DIST *= 10

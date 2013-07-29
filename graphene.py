@@ -53,7 +53,7 @@ np.use_fastnumpy = True
 #   Matplotlib python module
 #   IPython (optional)
 #   IDE: PyCharm
-# To run, in a python shell type %run filename.py (for Windows machines)
+# To run, in a python shell type %run graphene.py (for Windows machines)
 # To change parameters of the graphene lattice, open the parameters.py module and change away
 
 
@@ -61,10 +61,9 @@ np.use_fastnumpy = True
 # TODO: Clean up code according to Python standards - STARTED
 # TODO: Vectorize coordinate generator - NOT STARTED
 # TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
-# TODO: LOW PRIORITY: Define x_dist, y_dist, and z_dist for zigzag orientation && check zigzag generation - NS
+# TODO: LOW PRIORITY: Define X_DIST, Y_DIST, and Z_DIST for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
 # TODO: Could just use floor() instead of ceil() in dos()
-# TODO: Python convention is global constants are all caps
 
 # Module options to possibly add: PyPy, numexpr, Theano, pytables, cython, pysparse, numba, vectorization
 # http://technicaldiscovery.blogspot.com/2011/06/speeding-up-python-numpy-cython-and.html
@@ -80,21 +79,21 @@ def main_generator():
     """
 
     x_diff, y_diff = None, None
-    x, y = width, height
-    if distance:
+
+    if DISTANCE:
         # Limits for the loops
         # x_limit
-        if x > dw_leg:
-            x_diff = (x % dw_leg)
-        x_limit = x    # - x_diff
+        if WIDTH > DW_LEG:
+            x_diff = (WIDTH % DW_LEG)
+        x_limit = WIDTH    # - x_diff
 
         # y_limit
-        if y > dh_leg:
-            y_diff = (y % dh_leg)
-        y_limit = y    # - y_diff
+        if HEIGHT > DH_LEG:
+            y_diff = (HEIGHT % DH_LEG)
+        y_limit = HEIGHT    # - y_diff
 
-        x_times = round(x_limit // x_dist)
-        y_times = round(y_limit / y_dist)
+        x_times = round(x_limit // X_DIST)
+        y_times = round(y_limit / Y_DIST)
 
         print("x_limit: %s" % str(x_limit))
         print("y_limit: %s" % str(y_limit))
@@ -102,15 +101,13 @@ def main_generator():
             print("x_diff: %s" % str(x_diff))
         if y_diff:
             print("y_diff: %s" % str(y_diff))
-        print("x_dist: %s" % str(x_dist))
-        print("y_dist: %s" % str(y_dist))
     else:
-        x_times, y_times = x, y
+        x_times, y_times = WIDTH, HEIGHT
 
     print("x_times: %s" % str(x_times))
     print("y_times: %s" % str(y_times))
     print("Beginning Coordinate Generation")
-    if coord2_creation:
+    if COORD2_CREATION:
         (coord, coord2, x_atoms, y_atoms) = v_generator(x_times, y_times)
         return coord, coord2, x_atoms, y_atoms
     else:
@@ -320,9 +317,9 @@ def dos():
     E_max = 2
 
     # k vectors
-    kx = np.linspace((-4 * np.pi) / (2 * a * np.sqrt(3)), (4 * np.pi) / (2 * a * np.sqrt(3)), num=Nk)
-    ky = np.linspace((-4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)),
-                     (4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)), num=Nk)
+    kx = np.linspace((-4 * np.pi) / (2 * A * np.sqrt(3)), (4 * np.pi) / (2 * A * np.sqrt(3)), num=Nk)
+    ky = np.linspace((-4 * np.pi * np.sqrt(3)) / (2 * A * np.sqrt(3)),
+                     (4 * np.pi * np.sqrt(3)) / (2 * A * np.sqrt(3)), num=Nk)
 
     E = np.linspace(E_min, E_max, num=Nb)
 
@@ -332,8 +329,8 @@ def dos():
     for i in kx:
         for j in ky:
             # Energy Dispersion - Calculate positive and negative
-            e = t * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * a) / 2) *
-                    np.cos((j * a) / 2) + 4 * (np.cos((j * a) / 2)) ** 2)
+            e = t * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * A) / 2) *
+                    np.cos((j * A) / 2) + 4 * (np.cos((j * A) / 2)) ** 2)
             e2 = -e
 
             # Find bins
@@ -420,6 +417,8 @@ def dos_eig(H, atoms):
     # s = spla.svds(H, )[1]
     # rank = np.sum(s > 1e-12)
 
+    t = 2.7
+
     print("Calculating eigenvalues")
     # vals = spla.eigsh(H, 500, which='BE', return_eigenvectors=False)
     vals = linalg.eigvals(H.todense())
@@ -432,36 +431,40 @@ def dos_eig(H, atoms):
     Nb = 40
 
     # Min and Max Energy Values
-    E_min = -10
-    E_max = 10
+    E_min = -3 * t
+    E_max = 3 * t
 
     E = np.linspace(E_min, E_max, Nb)    # Energy Levels to calculate transmission at
 
     N = np.zeros(Nb)                     # Initialize N
 
-    # Energy increment
-    inc = (E_max - E_min) / Nb
-
     vals = np.real(vals)                 # Disregard imaginary part - eigenvalues are 'a + 0i' form
 
-    for e in vals:
-        e2 = -e
+    # Binning Method
+    # Energy increment
+    # inc = (E_max - E_min) / Nb
+    # for e in vals:
+    #     e2 = -e
+    #
+    #     # Find bins
+    #     b = np.ceil((e - E_min) / inc)
+    #     b2 = np.ceil((e2 - E_min) / inc)
+    #
+    #     # Tally bins (-1 because Python indexing starts at 0)
+    #     try:
+    #         N[b - 1] += 1
+    #     except IndexError:
+    #         pass
+    #     try:
+    #         N[b2 - 1] += 1
+    #     except IndexError:
+    #         pass
+    # N = N / atoms
 
-        # Find bins
-        b = np.ceil((e - E_min) / inc)
-        b2 = np.ceil((e2 - E_min) / inc)
-
-        # Tally bins (-1 because Python indexing starts at 0)
-        try:
-            N[b - 1] += 1
-        except IndexError:
-            pass
-        try:
-            N[b2 - 1] += 1
-        except IndexError:
-            pass
-
-    N = N / atoms
+    # Summation Method
+    gamma = 0.05
+    for e in E:
+        N[e] = (1 / atoms) * np.sum(gamma / (((e - vals) ** 2) + (gamma ** 2)))
 
     # data = np.column_stack((E, N))
     # np.savetxt('DataTxt/pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
@@ -497,27 +500,28 @@ def v_generator(x_times, y_times):
 
     x_atoms, y_atoms = 0, 0
     marker = 0
-    if chain:
+    if CHAIN:
         out_inc, in_inc = 1, 1
-    elif build_hor:
+    elif BUILD_HOR:
         out_inc, in_inc = 1, 2
     else:
         out_inc, in_inc = 2, 1
 
     pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=x_times).start()
+
     #
     # Coordinate Generator
     #
 
-    for j in xrange(0, int(x_times if build_hor else y_times), out_inc):
+    for j in xrange(0, int(x_times if BUILD_HOR else y_times), out_inc):
         j2 = j
-        for i in xrange(0, int(y_times if build_hor else x_times), in_inc):
-            if not build_hor:
+        for i in xrange(0, int(y_times if BUILD_HOR else x_times), in_inc):
+            if not BUILD_HOR:
                 j, i = i, j2
 
             if i == 0:
                 x_atoms += 1
-                if not chain:
+                if not CHAIN:
                     x_atoms += 1
 
             if j == 0:
@@ -525,14 +529,14 @@ def v_generator(x_times, y_times):
 
             if marker:
                 if j % 2 != 0:
-                    if not chain:
+                    if not CHAIN:
                         coord = np.vstack((coord, [[[j, i + 1, 0]]]))
                         coord = np.vstack((coord, [[[j, i + 1, 1]]]))
                     else:
                         pass
                 else:
                     coord = np.vstack((coord, [[[j, i, 0]]]))
-                    if x_times % 2 != 0 and j2 == (x_times - 1) and not distance:
+                    if x_times % 2 != 0 and j2 == (x_times - 1) and not DISTANCE:
                         pass
                     else:
                         coord = np.vstack((coord, [[[j, i, 1]]]))
@@ -542,7 +546,9 @@ def v_generator(x_times, y_times):
                 marker = 1
         pbar.update(j2 + 1)
     pbar.finish()
+
     print(np.shape(coord))
+
     print("Number of atoms along the x-axis: %s" % str(x_atoms))
     print("Number of atoms along the y-axis: %s" % str(y_atoms))
 
@@ -550,35 +556,37 @@ def v_generator(x_times, y_times):
     # Antidot Generator
     #
 
-    if cut_type == 1:
-        rect_x2 = rect_x
+    if CUT_TYPE == 1:
+        rect_x2 = RECT_X
+
         # Get upper left Y value and bottom right x value of rectangle
-        opp_x = rect_x2 + rect_w
-        opp_y = rect_y + rect_h
+        opp_x = rect_x2 + RECT_W
+        opp_y = RECT_Y + RECT_H
 
-    if coord2_creation or cut_type:
-        for ii in xrange(antidot_num):
-            rect_x2 += ii * (btw_dist + rect_w)
-            opp_x += ii * (btw_dist + rect_w)
+    if COORD2_CREATION or CUT_TYPE:
+        for ii in xrange(ANTIDOT_NUM):
+            rect_x2 += ii * (BTW_DIST + RECT_W)
+            opp_x += ii * (BTW_DIST + RECT_W)
 
-            coord3 = ((coord[:, 0, 0] * x_dist + coord[:, 0, 2] * z_dist).reshape(coord.shape[0], 1))
-            coord4 = (coord[:, 0, 1] * y_dist).reshape(coord.shape[0], 1)
+            coord_x = ((coord[:, 0, 0] * X_DIST + coord[:, 0, 2] * Z_DIST).reshape(coord.shape[0], 1))
+            coord_y = (coord[:, 0, 1] * Y_DIST).reshape(coord.shape[0], 1)
 
-            if cut_type:
-                idx = ((coord3 <= rect_x2) | (coord3 >= opp_x)) & ((coord4 <= rect_y) | (coord4 >= opp_y))
+            if CUT_TYPE:
+                idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) & ((coord_y <= RECT_Y) | (coord_y >= opp_y))
                 n = np.count_nonzero(idx)
                 coord = coord[idx].reshape(n, 1, 3)
-                if coord2_creation:
-                    coord2 = np.hstack((coord3[idx].reshape(n, 1), coord4[idx].reshape(n, 1)))
-            elif coord2_creation:
-                coord2 = np.hstack((coord3, coord4))
+                if COORD2_CREATION:
+                    coord2 = np.hstack((coord_x[idx].reshape(n, 1), coord_y[idx].reshape(n, 1)))
+            elif COORD2_CREATION:   # and not CUT_TYPE is assumed
+                coord2 = np.hstack((coord_x, coord_y))
+                return coord, coord2, x_atoms, y_atoms
 
         # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
         # sio.savemat('coord.mat', {'coord': coord}, oned_as='column')
 
         # Save xyz coordinates to graphenecoordinates.txt
         np.savetxt('graphenecoordinates.txt', coord2, delimiter='\t', fmt='%f')
-        if coord2_creation:
+        if COORD2_CREATION:
             return coord, coord2, x_atoms, y_atoms
 
     return coord, x_atoms, y_atoms
@@ -593,7 +601,7 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
 
     print("Start Ham calc")
     max_size = 16000     # Keep arrays at max size of around 2 GB. Also limits lattice to ~1969 nm.
-    diff = y_atoms if build_hor else x_atoms
+    diff = y_atoms if BUILD_HOR else x_atoms
     # if diff == 0:
     #     diff += 1
     num = coord.shape[0]    # Number of atoms in the lattice
@@ -611,12 +619,12 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
                (np.abs(coord[bound1:bound2, 0, 1] - coord[bound1:bound2, 0, 1, None]) <= 1))
 
         rows, cols = np.nonzero(idx)
-        x_arr = ((coord[rows, 0, 0] - coord[cols, 0, 0]) * x_dist +
-             (coord[rows, 0, 2] - coord[cols, 0, 2]) * z_dist)
-        y_arr = (coord[rows, 0, 1] - coord[cols, 0, 1]) * y_dist
+        x_arr = ((coord[rows, 0, 0] - coord[cols, 0, 0]) * X_DIST +
+             (coord[rows, 0, 2] - coord[cols, 0, 2]) * Z_DIST)
+        y_arr = (coord[rows, 0, 1] - coord[cols, 0, 1]) * Y_DIST
         r2 = x_arr * x_arr + y_arr * y_arr
 
-        idx = ((a - 0.5) ** 2 <= r2) & (r2 <= (a + 0.5) ** 2)
+        idx = ((A - 0.5) ** 2 <= r2) & (r2 <= (A + 0.5) ** 2)
 
         rows, cols = rows[idx], cols[idx]
         try:
@@ -649,21 +657,20 @@ def main():
     print(garcol_boolean)
 
     # Generate Coordinates
-    if coord2_creation:
+    if COORD2_CREATION:
         (coord, coord2, x_atoms, y_atoms) = main_generator()
     else:
         (coord, x_atoms, y_atoms) = main_generator()
     print("main_generator() complete")
 
     # Plot graphene
-    if coord2_creation and plot_option:
+    if COORD2_CREATION and PLOT_OPTION:
         plot_graphene(coord2)
         print("plot_graphene() complete")
         del coord2
 
     # Generate Hamiltonian
     (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
-    print("v_hamiltonian() complete")
     del coord
 
     # print H
