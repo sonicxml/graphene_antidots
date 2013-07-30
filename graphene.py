@@ -22,7 +22,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 MA 02110-1301, USA.
 """
 
-from __future__ import division, print_function     # Use Python3 division
+# from __future__ import division, print_function     # Use Python3 division
+from __future__ import division     # Use Python3 division
 import gc as garcol                 # Used for garbage collection to help save memory
 
 import matplotlib.pyplot as plt     # Matplotlib
@@ -53,7 +54,6 @@ np.use_fastnumpy = True
 
 # To-Do list:
 # TODO: Clean up code according to Python standards - STARTED
-# TODO: Vectorize coordinate generator - STARTED
 # TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
 # TODO: Add summation method for DoS Calculation - STARTED
 # TODO: LOWER PRIORITY: Use unit vectors for coordinate generation - NOT STARTED
@@ -413,7 +413,7 @@ def dos_eig(H, atoms):
     print("Eigenvalues calculated")
 
     # Number of bins
-    Nb = 40
+    Nb = 1000
 
     # Min and Max Energy Values
     E_min = -3 * T
@@ -428,7 +428,7 @@ def dos_eig(H, atoms):
     # Summation Method
     gamma = 0.05
     for e in E:
-        N[e] = (1 / atoms) * np.sum(gamma / (((e - vals) ** 2) + (gamma ** 2)))
+        N[e] = (1 / atoms) * np.sum((1 / np.pi) * (gamma / (((e - vals) ** 2) + (gamma ** 2))))
 
     # data = np.column_stack((E, N))
     np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
@@ -439,7 +439,8 @@ def dos_eig(H, atoms):
     plt.grid(True)
     plt.xlabel('Energy (eV)')
     plt.ylabel('Density of States')
-    plt.title('Density of States vs Energy \n Eigenvalues: %s, Bins: %s' % (Ne, Nb), horizontalalignment='center')
+    plt.title('Density of States vs Energy \n Eigenvalues: %s, Bins: %s \n Size: %s x %s angstroms \n Gamma: %s'
+              % (Ne, Nb, WIDTH, HEIGHT, gamma), horizontalalignment='center')
     plt.draw()
 
 
@@ -470,46 +471,34 @@ def v_generator(x_times, y_times):
     else:
         out_inc, in_inc = 2, 1
 
-    pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=x_times).start()
 
     #
     # Coordinate Generator
+    # TODO: Make it work with odd numbers of atoms on x-axis
     #
 
-    for j in xrange(0, int(x_times if BUILD_HOR else y_times), out_inc):
-        j2 = j
-        for i in xrange(0, int(y_times if BUILD_HOR else x_times), in_inc):
-            if not BUILD_HOR:
-                j, i = i, j2
-
-            if i == 0:
-                x_atoms += 1
-                if not CHAIN:
-                    x_atoms += 1
-
-            if j == 0:
-                y_atoms += 1
-
-            if marker:
-                if j % 2 != 0:
-                    if not CHAIN:
-                        coord = np.vstack((coord, [[[j, i + 1, 0]]]))
-                        coord = np.vstack((coord, [[[j, i + 1, 1]]]))
-                    else:
-                        pass
-                else:
-                    coord = np.vstack((coord, [[[j, i, 0]]]))
-                    if x_times % 2 != 0 and j2 == (x_times - 1) and not DISTANCE:
-                        pass
-                    else:
-                        coord = np.vstack((coord, [[[j, i, 1]]]))
-            else:
-                coord = [[[j, i, 0]]]
-                coord = np.vstack((coord, [[[j, i, 1]]]))
-                marker = 1
-        pbar.update(j2 + 1)
-    pbar.finish()
-
+    j = np.arange(0, int(x_times if BUILD_HOR else y_times), out_inc)
+    i = np.arange(0, int(y_times if BUILD_HOR else x_times), in_inc)
+    j_s = j.shape[0]
+    i_s = i.shape[0]
+    # j = np.repeat(j, i_s if not x_times % 2 != 0 else (i_s - 1))
+    # i = np.tile(i, j_s if not x_times % 2 != 0 else j_s - 1)
+    j = np.repeat(j, i_s)
+    i = np.tile(i, j_s)
+    j = np.reshape(j, (j.shape[0], 1))
+    i = np.reshape(i, (i.shape[0], 1))
+    k = np.zeros_like(i)
+    print(j.shape)
+    print(i.shape)
+    print(k.shape)
+    coord = np.dstack((j, i, k))
+    del j_s, i_s, j, i, k
+    coord = np.repeat(coord, 2, axis=0)
+    coord[1::2][:, 0, 2] += 1
+    if not CHAIN:
+        coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 != 0)] += 1
+    x_atoms = (np.amax(coord[:, 0, 0]) + 1) * (2 if not CHAIN else 1)
+    y_atoms = np.amax(coord[:, 0, 1]) + 1
     print(np.shape(coord))
 
     print("Number of atoms along the x-axis: %s" % str(x_atoms))
@@ -528,13 +517,12 @@ def v_generator(x_times, y_times):
 
     if COORD2_CREATION or CUT_TYPE:
         for ii in xrange(ANTIDOT_NUM):
-            rect_x2 += ii * (BTW_DIST + RECT_W)
-            opp_x += ii * (BTW_DIST + RECT_W)
-
             coord_x = ((coord[:, 0, 0] * X_DIST + coord[:, 0, 2] * Z_DIST).reshape(coord.shape[0], 1))
             coord_y = (coord[:, 0, 1] * Y_DIST).reshape(coord.shape[0], 1)
 
             if CUT_TYPE:
+                rect_x2 += ii * (BTW_DIST + RECT_W)
+                opp_x += ii * (BTW_DIST + RECT_W)
                 idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) & ((coord_y <= RECT_Y) | (coord_y >= opp_y))
                 n = np.count_nonzero(idx)
                 coord = coord[idx].reshape(n, 1, 3)

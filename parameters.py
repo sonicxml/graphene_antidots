@@ -32,7 +32,7 @@ MA 02110-1301, USA.
 #
 
 ARMCHAIR = True      # True if armchair orientation, false if zigzag
-CHAIN = True         # Is it a chain?
+CHAIN = False         # Is it a chain?
 BUILD_HOR = True     # True = upwards then horizontal, False = horizontal then upwards
 A = 1.42             # Carbon-carbon bond length in Angstroms
 # (1.42 is an average of carbon single bonds (C-C) and carbon double bonds (C=C))
@@ -59,15 +59,15 @@ else:
 # Units
 #
 
-DISTANCE = False     # True if x and y are distances, False if they are numbers of atoms
-NANOMETERS = False   # True if parameter units are in nanometers, false if in Angstroms
+DISTANCE = True     # True if x and y are distances, False if they are numbers of atoms
+NANOMETERS = True   # True if parameter units are in nanometers, false if in Angstroms
 
 #
 # General Lattice Parameters
 #
 
-WIDTH = 10             # Width of the unit cell
-HEIGHT = 1              # Height of the unit cell
+WIDTH = 15             # Width of the unit cell
+HEIGHT = 15              # Height of the unit cell
 NUM_X_TRANS = 0    # Number of times to translate unit cell along the x-axis
 NUM_Y_TRANS = 0    # Number of times to translate unit cell along the y-axis
 CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
