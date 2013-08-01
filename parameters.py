@@ -66,19 +66,19 @@ NANOMETERS = True   # True if parameter units are in nanometers, false if in Ang
 # General Lattice Parameters
 #
 
-WIDTH = 15             # Width of the unit cell
-HEIGHT = 15              # Height of the unit cell
+WIDTH = 20             # Width of the unit cell
+HEIGHT = 20              # Height of the unit cell
 NUM_X_TRANS = 0    # Number of times to translate unit cell along the x-axis
 NUM_Y_TRANS = 0    # Number of times to translate unit cell along the y-axis
-CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
+CUT_TYPE = 1       # 0 if no antidots, 1 if rectangular
 
 #
 # Rectangular Antidot Parameters
 #
 
-ANTIDOT_NUM = 2   # Number of antidots
+ANTIDOT_NUM = 1   # Number of antidots
 RECT_X = 1        # x-coordinate of the bottom left corner of the antidot
-RECT_Y = 0        # y-coordinate of the bottom left corner of the antidot
+RECT_Y = 1        # y-coordinate of the bottom left corner of the antidot
 RECT_H = 3        # Height of the antidot
 RECT_W = 1        # Width of the antidot
 BTW_DIST = 2      # Horizontal distance between antidots

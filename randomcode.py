@@ -7,6 +7,7 @@
 # from pysparse.sparse import spmatrix
 # from pysparse.itsolvers import krylov
 # from pysparse.eigen import jdsym
+# from numba.decorators import autojit
 
 
 def random_code_snippets():

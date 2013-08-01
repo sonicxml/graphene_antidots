@@ -22,7 +22,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 MA 02110-1301, USA.
 """
 
-# from __future__ import division, print_function     # Use Python3 division
 from __future__ import division     # Use Python3 division
 import gc as garcol                 # Used for garbage collection to help save memory
 
@@ -31,11 +30,9 @@ import numpy as np                  # NumPy
 import scipy.sparse as sparse       # Used for sparse matrices
 from scipy import linalg            # Linear Algebra Functions
 import scipy.sparse.linalg as spla
-from numba.decorators import autojit
-from progressbar import ProgressBar, Percentage, Bar
 
 from parameters import *
-np.use_fastnumpy = True
+np.use_fastnumpy = True     # Enthought Canopy comes with "fastnumpy", so enable it
 
 #
 # Getting Started
@@ -53,6 +50,7 @@ np.use_fastnumpy = True
 
 
 # To-Do list:
+# TODO: Zigzag, not Klein, edges in graphene?
 # TODO: Clean up code according to Python standards - STARTED
 # TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
 # TODO: Add summation method for DoS Calculation - STARTED
@@ -413,38 +411,39 @@ def dos_eig(H, atoms):
     print("Eigenvalues calculated")
 
     # Number of bins
-    Nb = 1000
+    Nb = (6 * T) / atoms
 
     # Min and Max Energy Values
     E_min = -3 * T
     E_max = 3 * T
 
-    E = np.linspace(E_min, E_max, Nb)    # Energy Levels to calculate transmission at
+    E = np.arange(E_min, E_max + Nb, Nb)      # Energy Levels to calculate density of states at
+    # E = np.linspace(E_min, E_max, Nb)    # Energy Levels to calculate transmission at
 
-    N = np.zeros(Nb)                     # Initialize N
+    N = np.empty(E.shape[0])                     # Initialize N
 
     vals = np.real(vals)                 # Disregard imaginary part - eigenvalues are 'a + 0i' form
-
+    vals = np.sort(vals)
     # Summation Method
-    gamma = 0.05
-    for e in E:
-        N[e] = (1 / atoms) * np.sum((1 / np.pi) * (gamma / (((e - vals) ** 2) + (gamma ** 2))))
+    gamma = 5 * Nb
+    for e in xrange(E.shape[0]):
+        N[e] = (1 / atoms) * np.sum((1 / np.pi) * (gamma / (((E[e] - vals) ** 2) + (gamma ** 2))))
 
-    # data = np.column_stack((E, N))
+    data = np.column_stack((E, N))
     np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
-    # np.savetxt('DataTxt/pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
-
+    np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
+    np.savetxt('pythonDoSBroad.txt', N, delimiter='\t', fmt='%f')
     plt.figure(2)
     plt.plot(E, N)
     plt.grid(True)
     plt.xlabel('Energy (eV)')
     plt.ylabel('Density of States')
-    plt.title('Density of States vs Energy \n Eigenvalues: %s, Bins: %s \n Size: %s x %s angstroms \n Gamma: %s'
-              % (Ne, Nb, WIDTH, HEIGHT, gamma), horizontalalignment='center')
+    plt.title('Density of States vs Energy', horizontalalignment='center')
+    plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, Gamma: %s\n Size: %s x %s angstroms'
+            % (Ne, E.shape[0], gamma, WIDTH, HEIGHT))
     plt.draw()
 
 
-# @autojit
 def v_generator(x_times, y_times):
     """
     Creates a 3-dimensional array (n x 0 x 2 - since the index starts at 0) 'coord'
@@ -462,15 +461,12 @@ def v_generator(x_times, y_times):
       Where . represents the dot product
     """
 
-    x_atoms, y_atoms = 0, 0
-    marker = 0
     if CHAIN:
         out_inc, in_inc = 1, 1
     elif BUILD_HOR:
         out_inc, in_inc = 1, 2
     else:
         out_inc, in_inc = 2, 1
-
 
     #
     # Coordinate Generator
@@ -479,12 +475,12 @@ def v_generator(x_times, y_times):
 
     j = np.arange(0, int(x_times if BUILD_HOR else y_times), out_inc)
     i = np.arange(0, int(y_times if BUILD_HOR else x_times), in_inc)
-    j_s = j.shape[0]
-    i_s = i.shape[0]
+    j_shape = j.shape[0]
+    i_shape = i.shape[0]
     # j = np.repeat(j, i_s if not x_times % 2 != 0 else (i_s - 1))
     # i = np.tile(i, j_s if not x_times % 2 != 0 else j_s - 1)
-    j = np.repeat(j, i_s)
-    i = np.tile(i, j_s)
+    j = np.repeat(j, i_shape)
+    i = np.tile(i, j_shape)
     j = np.reshape(j, (j.shape[0], 1))
     i = np.reshape(i, (i.shape[0], 1))
     k = np.zeros_like(i)
@@ -492,11 +488,11 @@ def v_generator(x_times, y_times):
     print(i.shape)
     print(k.shape)
     coord = np.dstack((j, i, k))
-    del j_s, i_s, j, i, k
+    del j_shape, i_shape, j, i, k
     coord = np.repeat(coord, 2, axis=0)
     coord[1::2][:, 0, 2] += 1
     if not CHAIN:
-        coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 != 0)] += 1
+        coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 == 0)] += 1
     x_atoms = (np.amax(coord[:, 0, 0]) + 1) * (2 if not CHAIN else 1)
     y_atoms = np.amax(coord[:, 0, 1]) + 1
     print(np.shape(coord))
@@ -523,7 +519,7 @@ def v_generator(x_times, y_times):
             if CUT_TYPE:
                 rect_x2 += ii * (BTW_DIST + RECT_W)
                 opp_x += ii * (BTW_DIST + RECT_W)
-                idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) & ((coord_y <= RECT_Y) | (coord_y >= opp_y))
+                idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) | ((coord_y <= RECT_Y) | (coord_y >= opp_y))
                 n = np.count_nonzero(idx)
                 coord = coord[idx].reshape(n, 1, 3)
                 if COORD2_CREATION:
@@ -615,6 +611,8 @@ def main():
         plot_graphene(coord2)
         print("plot_graphene() complete")
         del coord2
+
+    plt.show()
 
     # Generate Hamiltonian
     (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
