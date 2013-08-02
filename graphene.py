@@ -40,12 +40,10 @@ np.use_fastnumpy = True     # Enthought Canopy comes with "fastnumpy", so enable
 #
 
 # Before using this program, you must install:
-#   Python 2.7.x
-#   Numpy python module
-#   Scipy python module
-#   Matplotlib python module
-#   IPython (optional)
-#   IDE: PyCharm
+#   Python 2.7.x (If using Python 3.x, you must change xrange() to range())
+#   Numpy Python module
+#   Scipy Python module
+#   Matplotlib Python module
 # To run, in a python shell type %run graphene.py (for Windows machines)
 # To change parameters of the graphene lattice, open the parameters.py module and change away
 
@@ -53,13 +51,12 @@ np.use_fastnumpy = True     # Enthought Canopy comes with "fastnumpy", so enable
 # To-Do list:
 # TODO: Zigzag, not Klein, edges in graphene?
 # TODO: Clean up code according to Python standards - STARTED
-# TODO: Possibly use Cython or Numba to optimize calculations and improve calculation speed - STARTED
 # TODO: Add summation method for DoS Calculation - STARTED
 # TODO: LOWER PRIORITY: Use unit vectors for coordinate generation - NOT STARTED
 # TODO: LOW PRIORITY: Define X_DIST, Y_DIST, and Z_DIST for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
 
-# Module options to possibly add: PyPy, numexpr, Theano, pytables, cython, pysparse, numba, vectorization
+# Module options to possibly add: numexpr, Theano, pytables, cython, pysparse, numba
 # http://technicaldiscovery.blogspot.com/2011/06/speeding-up-python-numpy-cython-and.html
 # http://www.physics.udel.edu/~bnikolic/teaching/phys824/MATLAB/
 # http://deeplearning.net/software/theano/
@@ -79,12 +76,12 @@ def main_generator():
         # x_limit
         if WIDTH > DW_LEG:
             x_diff = (WIDTH % DW_LEG)
-        x_limit = WIDTH    # - x_diff
+        x_limit = WIDTH
 
         # y_limit
         if HEIGHT > DH_LEG:
             y_diff = (HEIGHT % DH_LEG)
-        y_limit = HEIGHT    # - y_diff
+        y_limit = HEIGHT
 
         x_times = round(x_limit // X_DIST)
         y_times = round(y_limit / Y_DIST)
@@ -402,14 +399,12 @@ def dos_eig(H, atoms):
     """
 
     print("Calculating eigenvalues")
-
     vals = linalg.eigvals(H.todense())
     del H
+    print("Eigenvalues calculated")
 
     Ne = np.size(vals)
     print("Ne = %s" % str(Ne))
-
-    print("Eigenvalues calculated")
 
     # Number of bins
     Nb = (6 * T) / atoms
@@ -419,24 +414,26 @@ def dos_eig(H, atoms):
     E_max = 3 * T
 
     E = np.arange(E_min, E_max + Nb, Nb)      # Energy Levels to calculate density of states at
-    # E = np.linspace(E_min, E_max, Nb)    # Energy Levels to calculate transmission at
 
     N = np.empty(E.shape[0])                     # Initialize N
 
     vals = np.real(vals)                 # Disregard imaginary part - eigenvalues are 'a + 0i' form
     vals = np.sort(vals)
-    # vals = vals[np.nonzero(vals)]
 
     # Summation Method
     gamma = 5 * Nb
     for e in xrange(E.shape[0]):
-        N[e] = (1 / atoms) * np.sum((1 / np.pi) * (gamma / (((E[e] - vals) ** 2) + (gamma ** 2))))
+        # Lorentzian (broadening) function - gamma changes the broadening amount
+        # Used to broaden the delta functions
+        # Also normalizes the density of states
+        N[e] = (1  /atoms) * np.sum((1 / np.pi) * (gamma / (((E[e] - vals) ** 2) + (gamma ** 2))))
 
-    data = np.column_stack((E, N))
+    # data = np.column_stack((E, N))
     np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
-    np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
-    np.savetxt('pythonDoSBroad.txt', N, delimiter='\t', fmt='%f')
+    # np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
+    # np.savetxt('pythonDoSBroad.txt', N, delimiter='\t', fmt='%f')
     np.save('Ndata', N)
+
     plt.figure(2)
     plt.plot(E, N)
     plt.grid(True)
@@ -481,16 +478,11 @@ def v_generator(x_times, y_times):
     i = np.arange(0, int(y_times if BUILD_HOR else x_times), in_inc)
     j_shape = j.shape[0]
     i_shape = i.shape[0]
-    # j = np.repeat(j, i_s if not x_times % 2 != 0 else (i_s - 1))
-    # i = np.tile(i, j_s if not x_times % 2 != 0 else j_s - 1)
     j = np.repeat(j, i_shape)
     i = np.tile(i, j_shape)
     j = np.reshape(j, (j.shape[0], 1))
     i = np.reshape(i, (i.shape[0], 1))
     k = np.zeros_like(i)
-    print(j.shape)
-    print(i.shape)
-    print(k.shape)
     coord = np.dstack((j, i, k))
     del j_shape, i_shape, j, i, k
     coord = np.repeat(coord, 2, axis=0)
@@ -593,27 +585,10 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     data = np.concatenate((np.repeat(-2.7, row_data.shape[0]), np.repeat(-2.7, left_edge.shape[0]),
                            np.repeat(2.7, right_edge.shape[0])))
 
-    # bottom_edge = np.nonzero(coord[:, 0, 1] == 0)[0]    # All extreme border atoms on bottom edge
-    # top_edge = np.nonzero(coord[:, 0, 1] == y_atoms - 1)[0]     # All extreme border atoms on top edge
-
-    # tmpdata = np.concatenate((np.repeat(-2.7, (left_edge.shape[0])), np.repeat(2.7, (right_edge.shape[0]))))
-    # data = np.append(data, tmpdata)
-    # data = np.append(data, np.repeat(2, (bottom_edge.shape[0] + top_edge.shape[0])))
     row_data = np.concatenate((row_data, left_edge, right_edge))
     col_data = np.concatenate((col_data, left_edge, right_edge))
-    # row_data = np.concatenate((row_data, np.concatenate((left_edge, right_edge, bottom_edge, top_edge))))
-    # col_data = np.concatenate((col_data, np.concatenate((left_edge, right_edge, bottom_edge, top_edge))))
 
-    H = sparse.coo_matrix((data, (row_data, col_data)),
-                          shape=(num, num)).tocsc()
-
-    # Find if there are any atoms not properly bonded
-    # H = H.todense()
-    # for i in xrange(num):
-    #     if np.nonzero(H[i, :])[0].shape[1] < 3:
-    #         print("row: %d" % i)
-    #     if np.nonzero(H[:, i])[0].shape[1] < 3:
-    #         print("column: %d" % i)
+    H = sparse.coo_matrix((data, (row_data, col_data)), shape=(num, num)).tocsc()
 
     # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
     sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
