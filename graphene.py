@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 MA 02110-1301, USA.
 """
 
+
 from __future__ import division     # Use Python3 division
 import gc as garcol                 # Used for garbage collection to help save memory
 
@@ -34,6 +35,8 @@ import scipy.sparse.linalg as spla  # Sparse Matrix Linear Algebra Functions
 
 from parameters import *
 np.use_fastnumpy = True     # Enthought Canopy comes with "fastnumpy", so enable it
+
+__author__ = 'Trevin Gandhi'
 
 #
 # Getting Started
@@ -112,7 +115,7 @@ def plot_graphene(coord2):
     """
     # Plot xy coordinates
     plt.figure(1)
-    plt.plot(coord2[:, 0], coord2[:, 1], marker='o')     # plot() = line graph, scatter() = point graph
+    plt.scatter(coord2[:, 0], coord2[:, 1], marker='o')     # plot() = line graph, scatter() = point graph
     plt.grid(True)
     plt.xlabel('Length (Angstroms)')
     plt.ylabel('Width (Angstroms)')
@@ -302,13 +305,15 @@ def dos():
     DoS = np.zeros(Nb)      # Initialize DoS
 
     # Min and Max Energy Values
-    E_min = -2
-    E_max = 2
+    E_min = -10
+    E_max = 10
+
+    a = 2.461
 
     # k vectors
-    kx = np.linspace((-4 * np.pi) / (2 * A * np.sqrt(3)), (4 * np.pi) / (2 * A * np.sqrt(3)), num=Nk)
-    ky = np.linspace((-4 * np.pi * np.sqrt(3)) / (2 * A * np.sqrt(3)),
-                     (4 * np.pi * np.sqrt(3)) / (2 * A * np.sqrt(3)), num=Nk)
+    kx = np.linspace((-4 * np.pi) / (2 * a * np.sqrt(3)), (4 * np.pi) / (2 * a * np.sqrt(3)), num=Nk)
+    ky = np.linspace((-4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)),
+                     (4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)), num=Nk)
 
     E = np.linspace(E_min, E_max, num=Nb)
 
@@ -318,15 +323,15 @@ def dos():
     for i in kx:
         for j in ky:
             # Energy Dispersion - Calculate positive and negative
-            e = T * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * A) / 2) *
-                    np.cos((j * A) / 2) + 4 * (np.cos((j * A) / 2)) ** 2)
+            e = T * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * a) / 2) *
+                    np.cos((j * a) / 2) + 4 * (np.cos((j * a) / 2)) ** 2)
             e2 = -e
 
             # Find bins
             b = np.floor((e - E_min) / inc)
             b2 = np.floor((e2 - E_min) / inc)
 
-            # Tally bins (-1 because Python indexing starts at 0)
+            # Tally bins
             try:
                 DoS[b] += 1
             except IndexError:
@@ -335,15 +340,19 @@ def dos():
                 DoS[b2] += 1
             except IndexError:
                 pass
-                
-    data = np.column_stack((E, DoS))
-    np.savetxt('DataTxt/pythonDoSData-Theo.txt', data, delimiter='\t', fmt='%f')
 
+    data = np.column_stack((E, DoS))
+    # np.savetxt('DataTxt/pythonDoSData-Theo.txt', data, delimiter='\t', fmt='%f')
+
+    plt.figure(2)
+    font = {'family' : 'normal',
+            'size'   : 22}
+    plt.rc('font', **font)
     plt.plot(E, DoS)
     plt.grid(True)
-    plt.xlabel('Energy (eV)')
-    plt.ylabel('Density of States')
-    plt.title('Density of States vs Energy')
+    plt.xlabel('Energy (eV)', fontsize=24)
+    plt.ylabel('Density of States', fontsize=24)
+    plt.title('Density of States vs Energy', fontsize=40)
     plt.show()
 
 
@@ -435,13 +444,16 @@ def dos_eig(H, atoms):
     np.save('Ndata', N)
 
     plt.figure(2)
+    font = {'family' : 'normal',
+            'size'   : 22}
+    plt.rc('font', **font)
     plt.plot(E, N)
     plt.grid(True)
-    plt.xlabel('Energy (eV)')
-    plt.ylabel('Density of States')
-    plt.title('Density of States vs Energy', horizontalalignment='center')
-    plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, Gamma: %s\n Size: %s x %s angstroms'
-            % (Ne, E.shape[0] - 1, gamma, WIDTH, HEIGHT))
+    plt.xlabel('Energy (eV)', fontsize=24)
+    plt.ylabel('Density of States', fontsize=24)
+    plt.title('Density of States vs Energy', horizontalalignment='center', fontsize=40)
+    # plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, Gamma: %s\n Size: %s x %s angstroms'
+    #         % (Ne, E.shape[0] - 1, gamma, WIDTH, HEIGHT))
     plt.draw()
 
 
@@ -500,29 +512,29 @@ def v_generator(x_times, y_times):
     # Antidot Generator
     #
 
-    if CUT_TYPE == 1:
-        rect_x2 = RECT_X
-
-        # Get upper left Y value and bottom right x value of rectangle
-        opp_x = rect_x2 + RECT_W
-        opp_y = RECT_Y + RECT_H
-
     if COORD2_CREATION or CUT_TYPE:
-        for ii in xrange(ANTIDOT_NUM):
-            coord_x = ((coord[:, 0, 0] * X_DIST + coord[:, 0, 2] * Z_DIST).reshape(coord.shape[0], 1))
-            coord_y = (coord[:, 0, 1] * Y_DIST).reshape(coord.shape[0], 1)
+        for ii in xrange(ANTIDOT_X_NUM):
+            for jj in xrange(ANTIDOT_Y_NUM):
+                coord_x = ((coord[:, 0, 0] * X_DIST + coord[:, 0, 2] * Z_DIST).reshape(coord.shape[0], 1))
+                coord_y = (coord[:, 0, 1] * Y_DIST).reshape(coord.shape[0], 1)
 
-            if CUT_TYPE:
-                rect_x2 += ii * (BTW_DIST + RECT_W)
-                opp_x += ii * (BTW_DIST + RECT_W)
-                idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) | ((coord_y <= RECT_Y) | (coord_y >= opp_y))
-                n = np.count_nonzero(idx)
-                coord = coord[idx].reshape(n, 1, 3)
-                if COORD2_CREATION:
-                    coord2 = np.hstack((coord_x[idx].reshape(n, 1), coord_y[idx].reshape(n, 1)))
-            elif COORD2_CREATION:   # and not CUT_TYPE is assumed
-                coord2 = np.hstack((coord_x, coord_y))
-                return coord, coord2, x_atoms, y_atoms
+                if CUT_TYPE:
+                    # Get bottom left x and y values
+                    rect_x2 = RECT_X + ii * (BTW_X_DIST + RECT_W)
+                    rect_y2 = RECT_Y + jj * (BTW_Y_DIST + RECT_H)
+
+                    # Get upper left y value and bottom right x value of rectangle
+                    opp_x = (RECT_X + RECT_W) + ii * (BTW_X_DIST + RECT_W)
+                    opp_y = (RECT_Y + RECT_H) + jj * (BTW_Y_DIST + RECT_H)
+
+                    idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) | ((coord_y <= rect_y2) | (coord_y >= opp_y))
+                    n = np.count_nonzero(idx)
+                    coord = coord[idx].reshape(n, 1, 3)
+                    if COORD2_CREATION:
+                        coord2 = np.hstack((coord_x[idx].reshape(n, 1), coord_y[idx].reshape(n, 1)))
+                elif COORD2_CREATION:   # and not CUT_TYPE is assumed
+                    coord2 = np.hstack((coord_x, coord_y))
+                    return coord, coord2, x_atoms, y_atoms
 
         # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
         # sio.savemat('coord.mat', {'coord': coord}, oned_as='column')
@@ -621,11 +633,11 @@ def main():
 
     # Generate Hamiltonian
     (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
-    plt.show()
     del coord
 
     # Calculate Density of States
     dos_eig(H, atoms)
+    # dos()
     print("DoS complete")
 
     plt.show()
