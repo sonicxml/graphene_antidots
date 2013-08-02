@@ -29,7 +29,8 @@ import matplotlib.pyplot as plt     # Matplotlib
 import numpy as np                  # NumPy
 import scipy.sparse as sparse       # Used for sparse matrices
 from scipy import linalg            # Linear Algebra Functions
-import scipy.sparse.linalg as spla
+import scipy.io as sio              # Used for saving arrays as MATLAB files
+import scipy.sparse.linalg as spla  # Sparse Matrix Linear Algebra Functions
 
 from parameters import *
 np.use_fastnumpy = True     # Enthought Canopy comes with "fastnumpy", so enable it
@@ -114,7 +115,7 @@ def plot_graphene(coord2):
     """
     # Plot xy coordinates
     plt.figure(1)
-    plt.scatter(coord2[:, 0], coord2[:, 1], marker='o')     # plot() = line graph, scatter() = point graph
+    plt.plot(coord2[:, 0], coord2[:, 1], marker='o')     # plot() = line graph, scatter() = point graph
     plt.grid(True)
     plt.xlabel('Length (Angstroms)')
     plt.ylabel('Width (Angstroms)')
@@ -424,6 +425,8 @@ def dos_eig(H, atoms):
 
     vals = np.real(vals)                 # Disregard imaginary part - eigenvalues are 'a + 0i' form
     vals = np.sort(vals)
+    # vals = vals[np.nonzero(vals)]
+
     # Summation Method
     gamma = 5 * Nb
     for e in xrange(E.shape[0]):
@@ -433,6 +436,7 @@ def dos_eig(H, atoms):
     np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
     np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
     np.savetxt('pythonDoSBroad.txt', N, delimiter='\t', fmt='%f')
+    np.save('Ndata', N)
     plt.figure(2)
     plt.plot(E, N)
     plt.grid(True)
@@ -440,7 +444,7 @@ def dos_eig(H, atoms):
     plt.ylabel('Density of States')
     plt.title('Density of States vs Energy', horizontalalignment='center')
     plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, Gamma: %s\n Size: %s x %s angstroms'
-            % (Ne, E.shape[0], gamma, WIDTH, HEIGHT))
+            % (Ne, E.shape[0] - 1, gamma, WIDTH, HEIGHT))
     plt.draw()
 
 
@@ -492,7 +496,7 @@ def v_generator(x_times, y_times):
     coord = np.repeat(coord, 2, axis=0)
     coord[1::2][:, 0, 2] += 1
     if not CHAIN:
-        coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 == 0)] += 1
+        coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 != 0)] += 1
     x_atoms = (np.amax(coord[:, 0, 0]) + 1) * (2 if not CHAIN else 1)
     y_atoms = np.amax(coord[:, 0, 1]) + 1
     print(np.shape(coord))
@@ -557,6 +561,12 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     else:
         chunks = np.floor(num / max_size + 1)
 
+    # To try to translate delta function at 0, add on-site energies to not fully bonded atoms (edge atoms)
+    left_edge = np.nonzero(coord[:, 0, 0] == 0)[0]
+    left_edge = left_edge[::2]  # All border atoms on left edge
+    right_edge = np.nonzero(coord[:, 0, 0] == np.amax(coord[:, 0, 0]))[0]
+    right_edge = right_edge[1::2]   # All border atoms on right edge
+
     for i in xrange(int(chunks)):
         bound1 = i * max_size - i * diff
         bound2 = (i + 1) * max_size - i * diff
@@ -572,6 +582,7 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
         idx = ((A - 0.5) ** 2 <= r2) & (r2 <= (A + 0.5) ** 2)
 
         rows, cols = rows[idx], cols[idx]
+
         try:
             row_data = np.hstack((row_data, rows + bound1))
             col_data = np.hstack((col_data, cols + bound1))
@@ -579,12 +590,33 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
             row_data = rows + bound1
             col_data = cols + bound1
     del idx, rows, cols, r2
-    data = np.repeat(-2.7, row_data.shape[0])
-    H = sparse.coo_matrix((data, (row_data, col_data)), shape=(num, num)).tocsc()
+    data = np.concatenate((np.repeat(-2.7, row_data.shape[0]), np.repeat(-2.7, left_edge.shape[0]),
+                           np.repeat(2.7, right_edge.shape[0])))
 
-    # print H
+    # bottom_edge = np.nonzero(coord[:, 0, 1] == 0)[0]    # All extreme border atoms on bottom edge
+    # top_edge = np.nonzero(coord[:, 0, 1] == y_atoms - 1)[0]     # All extreme border atoms on top edge
+
+    # tmpdata = np.concatenate((np.repeat(-2.7, (left_edge.shape[0])), np.repeat(2.7, (right_edge.shape[0]))))
+    # data = np.append(data, tmpdata)
+    # data = np.append(data, np.repeat(2, (bottom_edge.shape[0] + top_edge.shape[0])))
+    row_data = np.concatenate((row_data, left_edge, right_edge))
+    col_data = np.concatenate((col_data, left_edge, right_edge))
+    # row_data = np.concatenate((row_data, np.concatenate((left_edge, right_edge, bottom_edge, top_edge))))
+    # col_data = np.concatenate((col_data, np.concatenate((left_edge, right_edge, bottom_edge, top_edge))))
+
+    H = sparse.coo_matrix((data, (row_data, col_data)),
+                          shape=(num, num)).tocsc()
+
+    # Find if there are any atoms not properly bonded
+    # H = H.todense()
+    # for i in xrange(num):
+    #     if np.nonzero(H[i, :])[0].shape[1] < 3:
+    #         print("row: %d" % i)
+    #     if np.nonzero(H[:, i])[0].shape[1] < 3:
+    #         print("column: %d" % i)
+
     # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
-    # sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
+    sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
 
     # Help save memory
     garcol.collect()
@@ -612,10 +644,9 @@ def main():
         print("plot_graphene() complete")
         del coord2
 
-    plt.show()
-
     # Generate Hamiltonian
     (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
+    plt.show()
     del coord
 
     # Calculate Density of States

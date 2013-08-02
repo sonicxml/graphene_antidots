@@ -3,7 +3,6 @@
 # import sys    # General python import
 # import timeit # Used for timing functions - see random_code()
 # import scipy.sparse.linalg as spla  # Used for sparse matrix calculations
-# import scipy.io as sio              # Used for saving arrays as MATLAB files
 # from pysparse.sparse import spmatrix
 # from pysparse.itsolvers import krylov
 # from pysparse.eigen import jdsym
