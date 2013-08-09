@@ -27,6 +27,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 MA 02110-1301, USA.
 """
 
+import numpy as np
+
 #
 # Graphene Lattice Constants
 #
@@ -66,24 +68,27 @@ NANOMETERS = True   # True if parameter units are in nanometers, false if in Ang
 # General Lattice Parameters
 #
 
-WIDTH = 20             # Width of the unit cell
-HEIGHT = 20              # Height of the unit cell
+WIDTH = 10             # Width of the unit cell
+HEIGHT = 10              # Height of the unit cell
 NUM_X_TRANS = 0    # Number of times to translate unit cell along the x-axis
 NUM_Y_TRANS = 0    # Number of times to translate unit cell along the y-axis
-CUT_TYPE = 1       # 0 if no antidots, 1 if rectangular
+TRIM_EDGES = True  # Trim unbonded atoms from edges
+CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
+BINNING = False     # Use binning method?
+ON_SITE = False    # Add on-site energies for edge atoms (including antidot edges)
 
 #
 # Rectangular Antidot Parameters
 #
 
-ANTIDOT_X_NUM = 2   # Number of antidots along x
-ANTIDOT_Y_NUM = 2   # Number of antidots along y
-RECT_X = 4        # x-coordinate of the bottom left corner of the antidot
-RECT_Y = 4        # y-coordinate of the bottom left corner of the antidot
-RECT_H = 4        # Height of the antidot
-RECT_W = 3        # Width of the antidot
-BTW_X_DIST = 6      # Horizontal distance between antidots
-BTW_Y_DIST = 5      # Horizontal distance between antidots
+ANTIDOT_X_NUM = 4   # Number of antidots along x
+ANTIDOT_Y_NUM = 4  # Number of antidots along y
+RECT_X = 1        # x-coordinate of the bottom left corner of the antidot
+RECT_Y = 1        # y-coordinate of the bottom left corner of the antidot
+RECT_H = 1        # Height of the antidot
+RECT_W = 1        # Width of the antidot
+BTW_X_DIST = 1      # Horizontal distance between antidots
+BTW_Y_DIST = 1      # Horizontal distance between antidots
 
 #
 # Data Options
@@ -107,3 +112,17 @@ if NANOMETERS and DISTANCE:
     RECT_W *= 10
     BTW_X_DIST *= 10
     BTW_Y_DIST *= 10
+
+#
+# Fix antidot start points
+#
+
+# x-values
+    RECT_X = np.ceil(RECT_X / (DW_LEG + A)) * (DW_LEG + A)
+    RECT_W = np.ceil(RECT_W / (DW_LEG + A)) * (DW_LEG + A) - 1
+    BTW_X_DIST = np.ceil(BTW_X_DIST / (DW_LEG + A)) * (DW_LEG + A) + 1
+
+# y-values
+    RECT_Y = np.ceil(RECT_Y / DH_LEG) * DH_LEG
+    RECT_H = np.ceil(RECT_H / DH_LEG) * DH_LEG
+    BTW_Y_DIST = np.ceil(BTW_Y_DIST / DH_LEG) * DH_LEG

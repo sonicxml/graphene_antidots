@@ -52,9 +52,8 @@ __author__ = 'Trevin Gandhi'
 
 
 # To-Do list:
-# TODO: Zigzag, not Klein, edges in graphene?
+# TODO: Add periodic boundary conditions in Hamiltonian calculation
 # TODO: Clean up code according to Python standards - STARTED
-# TODO: Add summation method for DoS Calculation - STARTED
 # TODO: LOWER PRIORITY: Use unit vectors for coordinate generation - NOT STARTED
 # TODO: LOW PRIORITY: Define X_DIST, Y_DIST, and Z_DIST for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
@@ -115,183 +114,15 @@ def plot_graphene(coord2):
     """
     # Plot xy coordinates
     plt.figure(1)
-    plt.scatter(coord2[:, 0], coord2[:, 1], marker='o')     # plot() = line graph, scatter() = point graph
+    font = {'family' : 'normal',
+            'size'   : 22}
+    plt.rc('font', **font)
+    plt.plot(coord2[:, 0], coord2[:, 1], marker='o')     # plot() = line graph, scatter() = point graph
     plt.grid(True)
-    plt.xlabel('Length (Angstroms)')
-    plt.ylabel('Width (Angstroms)')
-    plt.title('Graphene Lattice')
+    plt.xlabel('Length (Angstroms)', fontsize=24)
+    plt.ylabel('Width (Angstroms)', fontsize=24)
+    plt.title('Graphene Antidot Lattice', fontsize=40)
     plt.draw()
-
-
-def transmission(H, atoms):
-    """
-    Calculate the transmission across the graphene sheet using a recursive Non-Equilibrium Green's Function
-    """
-
-    atomsh = atoms // 2
-    if atoms % 2 != 0:
-        atoms -= 1
-    print(str(atoms))
-    print(str(atomsh))
-
-    # Make Hon and Hoff each half of H
-    H = np.asmatrix(H)                        # Convert H to a matrix
-    Hon = sparse.dia_matrix(H[0:atomsh, 0:atomsh])
-    Hoff = sparse.dia_matrix(H[0:atomsh, atomsh:atoms])
-    Hoffd = sparse.dia_matrix(Hoff.H)      # Conjugate Transpose of Hoff
-    del H
-
-    eta = 0.003
-    # eta_original = 0.001
-
-    I = np.eye(Hon.shape[0])
-
-    Ne = 5        # Number of data points
-
-    E = np.linspace(-2, 2, Ne)     # Energy Levels to calculate transmission at
-
-    T = [None] * Ne     # Initialize T
-
-    def grmagnus_2(alpha, beta, betad, kp):
-        """
-        grmagnus with sparse matrices
-        From J. Phys. F Vol 14, 1984, 1205, M P Lopez Sancho, J. Rubio
-        20-50 % faster than gravik
-        From Huckel IV Simulator
-        """
-
-        tmp = linalg.inv(alpha.todense())           # Inverse part of Eq. 8
-        t = (-1 * tmp) * betad.todense()            # Eq. 8 (t0)
-        tt = (-1 * tmp) * beta.todense()            # Eq. 8 (t0 tilde)
-        T = t.copy()                                # First term in Eq. 16
-        Toldt = I.copy()                            # Product of tilde t in subsequent terms in Eq. 16
-        change = 1                                  # Convergence measure
-        counter = 0                                 # Just to make sure no infinite loop
-
-        etag = 0.000001     # 1E-6
-        etan = 0.0000000000001      # 1E-13
-        while linalg.norm(change) > etag and counter < 100:
-            counter += 1
-            Toldt = Toldt * tt      # Product of tilde t in subsequent terms in Eq. 16
-                                    # Don't use Toldt *= tt because
-                                    # "ComplexWarning: Casting complex values to real discards the imaginary part"
-                                    # - ruins results
-            tmp = I - t * tt - tt * t
-            if (1 / (np.linalg.cond(tmp))) < etan:
-                g = 0
-                print("1: tmp NaN or Inf occurred, return forced. Kp: " + str(kp))
-                return g
-
-            tmp = linalg.inv(tmp)                   # Inverse part of Eq. 12
-            t = (tmp * t * t)                       # Eq. 12 (t_i)
-            tt = (tmp * tt * tt)                    # Eq. 12 (t_i tilde)
-            change = Toldt * t                      # Next term of Eq. 16
-            T += change                             # Add it to T, Eq. 16
-
-            if np.isnan(change).sum() or np.isinf(change).sum():
-                g = 0
-                print("2: tmp NaN or Inf occurred, return forced. Kp: " + str(kp))
-                return g
-
-        g = (alpha + beta * T)
-
-        if (1 / (np.linalg.cond(g))) < etan:
-            g = 0
-            print("3: tmp NaN or Inf occured, return forced. Kp: " + str(kp))
-            return g
-
-        g = linalg.inv(g)
-        gn = (abs(g - linalg.inv(alpha - beta * g * betad)))
-
-        if gn.max() > 0.001 or counter > 99:
-            g = 0
-            print("4: Attention! not correct sgf. Kp: " + str(kp))
-            return g
-
-        # Help save memory
-        del tmp, t, tt, T, Toldt, change, counter, etag, etan, gn
-
-        return g
-
-    def gravik(alpha, beta, betad):
-        """
-        From J. Phys. F Vol 14, 1984, 1205, M P Lopez Sancho, J. Rubio
-        From Huckel IV Simulator
-        """
-        ginit = alpha.I
-        g = ginit.copy()
-        eps = 1
-        it = 1
-        while eps > 0.000001:
-            it += 1
-            S = g.copy()
-            g = alpha - beta * S * betad
-            try:
-                g = g.I
-            except linalg.LinAlgError:
-                pass
-
-            g = g * 0.5 + S * 0.5
-            eps = (abs(g - S).sum()) / (abs(g + S).sum())
-            if it > 200:
-                #if eps > 0.01:
-                #    debug_here()
-                eps = -eps
-        return g
-
-    for kp in xrange(Ne):
-        EE = E[kp]
-        print(str(EE))
-
-        alpha = sparse.coo_matrix((EE + 1j * eta) * I - Hon)
-        beta = sparse.coo_matrix((EE + 1j * eta) * I - Hoff)
-        betad = sparse.coo_matrix((EE + 1j * eta) * I - Hoffd)
-
-        # Use grmagnus
-        g1 = grmagnus_2(alpha, betad, beta, E[kp])
-        g2 = grmagnus_2(alpha, beta, betad, E[kp])
-
-        # Use gravik
-        # g1 = gravik(alpha,betad,beta)
-        # g2 = gravik(alpha,beta,betad)
-
-        #
-        # Equations Used
-        #
-
-        # Non-Equilibrium Green's Function: G = [EI - H - Sig1 - Sig2]^-1
-        #   EI = 0.003i
-        # Transmission: T = Trace[Gam1*G*Gam2*G.H]
-        # Gam1 (Broadening Function of lead 1) = i(Sig1 - Sig1.H)
-        # Gam2 (Broadening Function of lead 2) = i(Sig2 - Sig2.H)
-
-        sig1 = betad * g1 * beta
-        sig2 = beta * g2 * betad
-
-        # Help save memory
-        del alpha, beta, betad, g1, g2
-
-        gam1 = (1j * (sig1 - sig1.H))
-        gam2 = (1j * (sig2 - sig2.H))
-
-        G = linalg.inv((EE - 1j * eta) * I - Hon - sig1 - sig2)
-
-        # Help save memory
-        del sig1, sig2
-
-        T[kp] = np.trace(gam1 * G * gam2 * G.H).real
-
-        # Help save memory
-        del gam1, gam2, G
-
-    data = np.column_stack((E, T))
-    np.savetxt('DataTxt/pythonTransmissionData.txt', data, delimiter='\t', fmt='%f')
-    plt.plot(E, T)
-    plt.grid(True)
-    plt.xlabel('Energy (eV)')
-    plt.ylabel('Transmission')
-    plt.title('Transmission vs Energy')
-    plt.show()
 
 
 def dos():
@@ -300,7 +131,9 @@ def dos():
     """
 
     Nb = 101                # Number of bins
-    Nk = 1001               # Number of k vectors
+    Nkx = 186               # Number of k vectors on x
+    Nky = 164               # Number of k vectors on y
+
 
     DoS = np.zeros(Nb)      # Initialize DoS
 
@@ -311,35 +144,37 @@ def dos():
     a = 2.461
 
     # k vectors
-    kx = np.linspace((-4 * np.pi) / (2 * a * np.sqrt(3)), (4 * np.pi) / (2 * a * np.sqrt(3)), num=Nk)
+    kx = np.linspace((-4 * np.pi) / (2 * a * np.sqrt(3)), (4 * np.pi) / (2 * a * np.sqrt(3)), num=Nkx)
     ky = np.linspace((-4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)),
-                     (4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)), num=Nk)
+                     (4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)), num=Nky)
+    if BINNING:
+        E = np.linspace(E_min, E_max, num=Nb)
 
-    E = np.linspace(E_min, E_max, num=Nb)
-
-    # Energy increment
-    inc = (E_max - E_min) / Nb
-
+        # Energy increment
+        inc = (E_max - E_min) / Nb
+    # else:
+    #     Nb = (6 * T) / atoms
     for i in kx:
         for j in ky:
             # Energy Dispersion - Calculate positive and negative
             e = T * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * a) / 2) *
                     np.cos((j * a) / 2) + 4 * (np.cos((j * a) / 2)) ** 2)
             e2 = -e
+            if BINNING:
+                # Find bins
+                b = np.floor((e - E_min) / inc)
+                b2 = np.floor((e2 - E_min) / inc)
 
-            # Find bins
-            b = np.floor((e - E_min) / inc)
-            b2 = np.floor((e2 - E_min) / inc)
+                # Tally bins
+                try:
+                    DoS[b] += 1
+                except IndexError:
+                    pass
+                try:
+                    DoS[b2] += 1
+                except IndexError:
+                    pass
 
-            # Tally bins
-            try:
-                DoS[b] += 1
-            except IndexError:
-                pass
-            try:
-                DoS[b2] += 1
-            except IndexError:
-                pass
 
     data = np.column_stack((E, DoS))
     # np.savetxt('DataTxt/pythonDoSData-Theo.txt', data, delimiter='\t', fmt='%f')
@@ -408,34 +243,63 @@ def dos_eig(H, atoms):
     """
 
     print("Calculating eigenvalues")
-    vals = linalg.eigvals(H.todense())
+    vals = linalg.eigvals(H)
     del H
     print("Eigenvalues calculated")
 
     Ne = np.size(vals)
     print("Ne = %s" % str(Ne))
 
-    # Number of bins
-    Nb = (6 * T) / atoms
+    if BINNING:
+        # Number of bins
+        Nb = 40
+    else:
+        Nb = (6 * T) / atoms
 
     # Min and Max Energy Values
     E_min = -3 * T
     E_max = 3 * T
 
-    E = np.arange(E_min, E_max + Nb, Nb)      # Energy Levels to calculate density of states at
+    if BINNING:
+        E = np.linspace(E_min, E_max, Nb)    # Energy Levels to bin density of states at
+    else:
+        E = np.arange(E_min, E_max + Nb, Nb)      # Energy Levels to calculate density of states at
 
     N = np.empty(E.shape[0])                     # Initialize N
 
     vals = np.real(vals)                 # Disregard imaginary part - eigenvalues are 'a + 0i' form
-    vals = np.sort(vals)
+    # vals = np.sort(vals)
 
-    # Summation Method
-    gamma = 5 * Nb
-    for e in xrange(E.shape[0]):
-        # Lorentzian (broadening) function - gamma changes the broadening amount
-        # Used to broaden the delta functions
-        # Also normalizes the density of states
-        N[e] = (1  /atoms) * np.sum((1 / np.pi) * (gamma / (((E[e] - vals) ** 2) + (gamma ** 2))))
+    if BINNING:
+        # Binning Method
+        # Energy increment
+        inc = (E_max - E_min) / Nb
+        for e in vals:
+            e2 = -e
+
+            # Find bins
+            b = np.floor((e - E_min) / inc)
+            b2 = np.floor((e2 - E_min) / inc)
+
+            # Tally bins (-1 because Python indexing starts at 0)
+            try:
+                N[b] += 1
+            except IndexError:
+                pass
+            try:
+                N[b2] += 1
+            except IndexError:
+                pass
+        N = N / atoms
+
+    else:
+        # Summation Method
+        gamma = 10 * Nb
+        for e in xrange(E.shape[0]):
+            # Lorentzian (broadening) function - gamma changes the broadening amount
+            # Used to broaden the delta functions
+            # Also normalizes the density of states
+            N[e] = (1 / atoms) * np.sum((1 / np.pi) * (gamma / (((E[e] - vals) ** 2) + (gamma ** 2))))
 
     # data = np.column_stack((E, N))
     np.savetxt('pythonEigenvalues.txt', vals, delimiter='\t', fmt='%f')
@@ -503,6 +367,14 @@ def v_generator(x_times, y_times):
         coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 != 0)] += 1
     x_atoms = (np.amax(coord[:, 0, 0]) + 1) * (2 if not CHAIN else 1)
     y_atoms = np.amax(coord[:, 0, 1]) + 1
+
+    if TRIM_EDGES:
+        x_max = np.amax(coord[:, 0, 0])
+        idx = ((coord[:, 0, 0] == 0) & (coord[:, 0, 2] == 0)) & (coord[:, 0, 1] % 2 == 0)
+        idx2 = ((coord[:, 0, 0] == x_max) & (coord[:, 0, 2] == 1)) & (coord[:, 0, 1] % 2 == (0 if x_times % 2 == 1 else 1))
+        idx = ~(idx | idx2)
+        coord = coord[idx]
+
     print(np.shape(coord))
 
     print("Number of atoms along the x-axis: %s" % str(x_atoms))
@@ -565,11 +437,12 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     else:
         chunks = np.floor(num / max_size + 1)
 
-    # To try to translate delta function at 0, add on-site energies to not fully bonded atoms (edge atoms)
-    left_edge = np.nonzero(coord[:, 0, 0] == 0)[0]
-    left_edge = left_edge[::2]  # All border atoms on left edge
-    right_edge = np.nonzero(coord[:, 0, 0] == np.amax(coord[:, 0, 0]))[0]
-    right_edge = right_edge[1::2]   # All border atoms on right edge
+    if ON_SITE:
+        # To try to translate delta function at 0, add on-site energies to not fully bonded atoms (edge atoms)
+        left_edge = np.nonzero(coord[:, 0, 0] == 0)[0]
+        left_edge = left_edge[::2]  # All border atoms on left edge
+        right_edge = np.nonzero(coord[:, 0, 0] == np.amax(coord[:, 0, 0]))[0]
+        right_edge = right_edge[1::2]   # All border atoms on right edge
 
     for i in xrange(int(chunks)):
         bound1 = i * max_size - i * diff
@@ -594,16 +467,30 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
             row_data = rows + bound1
             col_data = cols + bound1
     del idx, rows, cols, r2
-    data = np.concatenate((np.repeat(-2.7, row_data.shape[0]), np.repeat(-2.7, left_edge.shape[0]),
-                           np.repeat(2.7, right_edge.shape[0])))
 
-    row_data = np.concatenate((row_data, left_edge, right_edge))
-    col_data = np.concatenate((col_data, left_edge, right_edge))
+    if ON_SITE:
+        data = np.concatenate((np.repeat(-2.7, row_data.shape[0]), np.repeat(-2.7, left_edge.shape[0]),
+                               np.repeat(2.7, right_edge.shape[0])))
+
+        row_data = np.concatenate((row_data, left_edge, right_edge))
+        col_data = np.concatenate((col_data, left_edge, right_edge))
+    else:
+        data = np.repeat(-2.7, row_data.shape[0])
 
     H = sparse.coo_matrix((data, (row_data, col_data)), shape=(num, num)).tocsc()
 
+    H = H.todense()
+
+    if ON_SITE:
+        count = 0
+        for i in xrange(num):
+            if np.nonzero(H[i, :])[0].shape[1] < 3:
+                if np.nonzero(H[:, i])[0].shape[1] < 3:
+                    count += 1
+                    H[i, i] = -2.7 if np.random.randint(0, 2, 1) else 2.7
+
     # Save as a MATLAB file for easy viewing and to compare MATLAB results with Python results
-    sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
+    # sio.savemat('H.mat', {'H': H.todense()}, oned_as='column')
 
     # Help save memory
     garcol.collect()

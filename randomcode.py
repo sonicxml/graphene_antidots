@@ -365,3 +365,175 @@ def v_hamiltonian_snippets():
     # H.put(-2.7, row_data, col_data)
 
     pass
+
+
+def transmission(H, atoms):
+    """
+    Calculate the transmission across the graphene sheet using a recursive Non-Equilibrium Green's Function
+    """
+
+    atomsh = atoms // 2
+    if atoms % 2 != 0:
+        atoms -= 1
+    print(str(atoms))
+    print(str(atomsh))
+
+    # Make Hon and Hoff each half of H
+    # H = np.asmatrix(H)                        # Convert H to a matrix
+    Hon = sparse.dia_matrix(H[0:atomsh, 0:atomsh])
+    Hoff = sparse.dia_matrix(H[0:atomsh, atomsh:atoms])
+    Hoffd = sparse.dia_matrix(Hoff.H)      # Conjugate Transpose of Hoff
+    del H
+
+    eta = 0.003
+    # eta_original = 0.001
+
+    I = np.eye(Hon.shape[0])
+
+    Ne = 5        # Number of data points
+
+    E = np.linspace(-2, 2, Ne)     # Energy Levels to calculate transmission at
+
+    T = [None] * Ne     # Initialize T
+
+    def grmagnus_2(alpha, beta, betad, kp):
+        """
+        grmagnus with sparse matrices
+        From J. Phys. F Vol 14, 1984, 1205, M P Lopez Sancho, J. Rubio
+        20-50 % faster than gravik
+        From Huckel IV Simulator
+        """
+
+        tmp = linalg.inv(alpha.todense())           # Inverse part of Eq. 8
+        t = (-1 * tmp) * betad.todense()            # Eq. 8 (t0)
+        tt = (-1 * tmp) * beta.todense()            # Eq. 8 (t0 tilde)
+        T = t.copy()                                # First term in Eq. 16
+        Toldt = I.copy()                            # Product of tilde t in subsequent terms in Eq. 16
+        change = 1                                  # Convergence measure
+        counter = 0                                 # Just to make sure no infinite loop
+
+        etag = 0.000001     # 1E-6
+        etan = 0.0000000000001      # 1E-13
+        while linalg.norm(change) > etag and counter < 100:
+            counter += 1
+            Toldt = Toldt * tt      # Product of tilde t in subsequent terms in Eq. 16
+                                    # Don't use Toldt *= tt because
+                                    # "ComplexWarning: Casting complex values to real discards the imaginary part"
+                                    # - ruins results
+            tmp = I - t * tt - tt * t
+            if (1 / (np.linalg.cond(tmp))) < etan:
+                g = 0
+                print("1: tmp NaN or Inf occurred, return forced. Kp: " + str(kp))
+                return g
+
+            tmp = linalg.inv(tmp)                   # Inverse part of Eq. 12
+            t = (tmp * t * t)                       # Eq. 12 (t_i)
+            tt = (tmp * tt * tt)                    # Eq. 12 (t_i tilde)
+            change = Toldt * t                      # Next term of Eq. 16
+            T += change                             # Add it to T, Eq. 16
+
+            if np.isnan(change).sum() or np.isinf(change).sum():
+                g = 0
+                print("2: tmp NaN or Inf occurred, return forced. Kp: " + str(kp))
+                return g
+
+        g = (alpha + beta * T)
+
+        if (1 / (np.linalg.cond(g))) < etan:
+            g = 0
+            print("3: tmp NaN or Inf occured, return forced. Kp: " + str(kp))
+            return g
+
+        g = linalg.inv(g)
+        gn = (abs(g - linalg.inv(alpha - beta * g * betad)))
+
+        if gn.max() > 0.001 or counter > 99:
+            g = 0
+            print("4: Attention! not correct sgf. Kp: " + str(kp))
+            return g
+
+        # Help save memory
+        del tmp, t, tt, T, Toldt, change, counter, etag, etan, gn
+
+        return g
+
+    def gravik(alpha, beta, betad):
+        """
+        From J. Phys. F Vol 14, 1984, 1205, M P Lopez Sancho, J. Rubio
+        From Huckel IV Simulator
+        """
+        ginit = spla.inv(alpha)
+        g = ginit.copy()
+        eps = 1
+        it = 1
+        while eps > 0.000001:
+            it += 1
+            S = g.copy()
+            g = alpha - beta * S * betad
+            try:
+                g = spla.inv(g)
+            except linalg.LinAlgError:
+                pass
+
+            g = g * 0.5 + S * 0.5
+            eps = (abs(g - S).sum()) / (abs(g + S).sum())
+            if it > 200:
+                #if eps > 0.01:
+                #    debug_here()
+                eps = -eps
+        return g
+
+    for kp in xrange(Ne):
+        EE = E[kp]
+        print(str(EE))
+
+        alpha = sparse.coo_matrix((EE + 1j * eta) * I - Hon)
+        beta = sparse.coo_matrix((EE + 1j * eta) * I - Hoff)
+        betad = sparse.coo_matrix((EE + 1j * eta) * I - Hoffd)
+
+        # Use grmagnus
+        # g1 = grmagnus_2(alpha, betad, beta, E[kp])
+        # g2 = grmagnus_2(alpha, beta, betad, E[kp])
+
+        # Use gravik
+        g1 = gravik(alpha,betad,beta)
+        g2 = gravik(alpha,beta,betad)
+
+        #
+        # Equations Used
+        #
+
+        # Non-Equilibrium Green's Function: G = [EI - H - Sig1 - Sig2]^-1
+        #   EI = 0.003i
+        # Transmission: T = Trace[Gam1*G*Gam2*G.H]
+        # Gam1 (Broadening Function of lead 1) = i(Sig1 - Sig1.H)
+        # Gam2 (Broadening Function of lead 2) = i(Sig2 - Sig2.H)
+
+        sig1 = betad * g1 * beta
+        sig2 = beta * g2 * betad
+
+        # Help save memory
+        del alpha, beta, betad, g1, g2
+
+        gam1 = (1j * (sig1 - sig1.H))
+        gam2 = (1j * (sig2 - sig2.H))
+
+        G = linalg.inv((EE - 1j * eta) * I - Hon - sig1 - sig2)
+
+        # Help save memory
+        del sig1, sig2
+
+        T[kp] = np.trace(gam1 * G * gam2 * G.H).real
+
+        # Help save memory
+        del gam1, gam2, G
+
+    data = np.column_stack((E, T))
+    np.savetxt('DataTxt/pythonTransmissionData.txt', data, delimiter='\t', fmt='%f')
+    plt.plot(E, T)
+    plt.grid(True)
+    plt.xlabel('Energy (eV)')
+    plt.ylabel('Transmission')
+    plt.title('Transmission vs Energy')
+    plt.show()
+
