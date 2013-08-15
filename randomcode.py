@@ -537,3 +537,53 @@ def transmission(H, atoms):
     plt.title('Transmission vs Energy')
     plt.show()
 
+
+def dos_negf(H, atoms):
+    """
+    Calculate the density of states across the graphene sheet using a
+    recursive Non-Equilibrium Green's Function
+    """
+
+    # H = sparse.dia_matrix(H)             # Convert H to a matrix
+
+    eta = 1e-3
+
+    I = sparse.eye(atoms)
+
+    # Min and Max Energy Values
+    E_min = -10
+    E_max = 10
+
+    Ne = 101                             # Number of Data Points
+
+    # Energy Levels to calculate density of states at
+    E = np.linspace(E_min, E_max, Ne)
+
+    N = np.zeros(Ne)
+
+    print(
+        np.array_equal(H, H.H))  # Check if Hamiltonian is a Hermitian matrix
+
+    for kp in xrange(Ne):
+        EE = E[kp]
+        print(str(EE))
+
+        G = np.asmatrix(spla.inv((EE + 1j * eta) * I - H))
+
+        N[kp] = (-1 / np.pi) * np.imag(np.trace(G))
+
+        # Help save memory
+        del G
+
+    data = np.column_stack((E, N))
+    np.savetxt('DataTxt/pythonDoSData-NEGF.txt', data, delimiter='\t',
+               fmt='%f')
+
+    plt.clf()
+    plt.plot(E, N)
+    plt.grid(True)
+    plt.xlabel('Energy (eV)')
+    plt.ylabel('Density of States')
+    plt.title('Density of States vs Energy')
+    plt.show()
+

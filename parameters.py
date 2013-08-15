@@ -68,14 +68,20 @@ NANOMETERS = True   # True if parameter units are in nanometers, false if in Ang
 # General Lattice Parameters
 #
 
-WIDTH = 10             # Width of the unit cell
-HEIGHT = 10              # Height of the unit cell
+WIDTH = .2             # Width of the unit cell
+HEIGHT = .5              # Height of the unit cell
 NUM_X_TRANS = 0    # Number of times to translate unit cell along the x-axis
 NUM_Y_TRANS = 0    # Number of times to translate unit cell along the y-axis
-TRIM_EDGES = True  # Trim unbonded atoms from edges
 CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
-BINNING = False     # Use binning method?
+
+#
+# Algorithmic Parameters
+#
+
+TRIM_EDGES = False  # Trim unbonded atoms from edges
+BINNING = False      # Use binning method?
 ON_SITE = False    # Add on-site energies for edge atoms (including antidot edges)
+PERIODIC_BOUNDARY = True    # Use periodic boundary conditions
 
 #
 # Rectangular Antidot Parameters
