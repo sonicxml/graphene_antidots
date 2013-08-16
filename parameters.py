@@ -62,16 +62,14 @@ else:
 #
 
 DISTANCE = True     # True if x and y are distances, False if they are numbers of atoms
-NANOMETERS = True   # True if parameter units are in nanometers, false if in Angstroms
+NANOMETERS = False   # True if parameter units are in nanometers, false if in Angstroms
 
 #
 # General Lattice Parameters
 #
 
-WIDTH = .2             # Width of the unit cell
-HEIGHT = .5              # Height of the unit cell
-NUM_X_TRANS = 0    # Number of times to translate unit cell along the x-axis
-NUM_Y_TRANS = 0    # Number of times to translate unit cell along the y-axis
+WIDTH = 5             # Width of the unit cell
+HEIGHT = 2              # Height of the unit cell
 CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
 
 #
@@ -100,9 +98,9 @@ BTW_Y_DIST = 1      # Horizontal distance between antidots
 # Data Options
 #
 
-# Note: Must have COORD2_CREATION as True for PLOT_OPTION to work
+# Note: Must have XY_COORD_CREATION as True for PLOT_OPTION to work
 PLOT_OPTION = True          # Plot the graphene sheet
-COORD2_CREATION = True     # Create the coord2 array?
+XY_COORD_CREATION = True     # Create the coord2 array?
 
 
 #

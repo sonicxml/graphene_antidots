@@ -25,15 +25,16 @@ MA 02110-1301, USA.
 
 
 from __future__ import division     # Use Python3 division
+
 import gc as garcol                 # Garbage collection
 import matplotlib.pyplot as plt     # matplotlib
 import numpy as np                  # NumPy
 import scipy.sparse as sparse       # Used for sparse matrices
 from scipy import linalg            # Linear Algebra Functions
 import scipy.io as sio              # Used for saving arrays as MATLAB files
-import scipy.sparse.linalg as spla  # Sparse Matrix Linear Algebra Functions
 from progressbar import Bar, Counter, ETA, Percentage, ProgressBar, Timer
-from parameters import *
+
+import parameters as p
 np.use_fastnumpy = True  # Enthought Canopy comes with "fastnumpy", so enable it
 
 #
@@ -49,6 +50,15 @@ np.use_fastnumpy = True  # Enthought Canopy comes with "fastnumpy", so enable it
 # To change parameters of the graphene lattice,
 # open the parameters.py module and change away
 
+# Get rid of TO-DO list warnings
+# pylint: disable=W0511
+
+# False positive from np.load()
+# pylint: disable=E1103
+
+# IT'S NOT MAGIC, IT'S A LANGUAGE FEATURE PYLINT!!
+# (W0142: Used * or ** magic (star-args))
+# pylint: disable=W0142
 
 # To-Do list:
 # TODO: Add periodic boundary conditions in Hamiltonian calculation - STARTED
@@ -57,72 +67,61 @@ np.use_fastnumpy = True  # Enthought Canopy comes with "fastnumpy", so enable it
 # TODO: LOW PRIORITY: Define X_DIST, Y_DIST, and Z_DIST
 #       for zigzag orientation && check zigzag generation - NS
 # TODO: LOW PRIORITY: Finish translator() - NOT STARTED
+# TODO: Break up dos_calculator() and v_hamiltonian()
+# TODO: Rename dos_calculator(), dos(), dos_eig(), v_hamiltonian()
 
-# Module options to possibly add: numexpr, Theano, pytables, cython, pysparse, numba
-# http://technicaldiscovery.blogspot.com/2011/06/speeding-up-python-numpy-cython-and.html
-# http://www.physics.udel.edu/~bnikolic/teaching/phys824/MATLAB/
-# http://deeplearning.net/software/theano/
-# http://lamp.tu-graz.ac.at/~hadley/ss1/bands/tightbinding/tightbinding.php
-# http://www2.physics.ox.ac.uk/sites/default/files/BandMT_04.pdf
-# http://www.physics.ucdavis.edu/Classes/Physics243A/TightBinding.Basics.Omar.pdf
+# Module options to possibly add: numexpr, Theano, pytables,
+#                                 cython, pysparse, numba
+# technicaldiscovery.blogspot.com/2011/06/speeding-up-python-numpy-cython-and.html
+# www.physics.udel.edu/~bnikolic/teaching/phys824/MATLAB/
+# deeplearning.net/software/theano/
+# lamp.tu-graz.ac.at/~hadley/ss1/bands/tightbinding/tightbinding.php
+# www2.physics.ox.ac.uk/sites/default/files/BandMT_04.pdf
+# www.physics.ucdavis.edu/Classes/Physics243A/TightBinding.Basics.Omar.pdf
 
-def coord_generator():
+
+def generator_wrapper():
     """
     Corrects for Units, Calculates Parameters,
     and Calls the Coordinate Generator Function
     """
 
-    x_diff, y_diff = None, None
-
-    if DISTANCE:
-        # Limits for the loops
-        # x_limit
-        if WIDTH > DW_LEG:
-            x_diff = (WIDTH % DW_LEG)
-        x_limit = WIDTH
-
-        # y_limit
-        if HEIGHT > DH_LEG:
-            y_diff = (HEIGHT % DH_LEG)
-        y_limit = HEIGHT
-
-        x_times = round(x_limit // X_DIST)
-        y_times = round(y_limit / Y_DIST)
-
-        print("Parameters calculated:")
-        print("x_limit: %s" % str(x_limit))
-        print("y_limit: %s" % str(y_limit))
-        if x_diff:
-            print("x_diff: %s" % str(x_diff))
-        if y_diff:
-            print("y_diff: %s" % str(y_diff))
+    if p.DISTANCE:
+        x_times = round(p.WIDTH // p.X_DIST)
+        y_times = round(p.HEIGHT / p.Y_DIST)
     else:
-        x_times, y_times = WIDTH, HEIGHT
-        print("Parameters calculated:")
+        x_times, y_times = p.WIDTH, p.HEIGHT
 
+    print("Parameters calculated:")
     print("x_times: %s" % str(x_times))
     print("y_times: %s" % str(y_times))
     print("Beginning coordinate generation")
-    if COORD2_CREATION:
-        (coord, coord2, x_atoms, y_atoms) = v_generator(x_times, y_times)
+    if p.XY_COORD_CREATION:
+        (vector_coord,
+         num_x_atoms, num_y_atoms) = vector_coord_generator(x_times, y_times)
+        vector_coord, xy_coord = antidot_generator(vector_coord)
         print("Coordinate generation finished")
-        if PLOT_OPTION:
-            plot_graphene(coord2)
+        if p.PLOT_OPTION:
+            plot_graphene_lattice(xy_coord)
             print("Graphene plot drawn")
-            del coord2
+            del xy_coord
     else:
-        (coord, x_atoms, y_atoms) = v_generator(x_times, y_times)
+        (vector_coord, num_x_atoms, num_y_atoms) = \
+            vector_coord_generator(x_times, y_times)
+        vector_coord = antidot_generator(vector_coord)
         print("Coordinate generation finished")
 
-    return coord, x_atoms, y_atoms
+    return vector_coord, num_x_atoms, num_y_atoms
 
 
-def v_generator(x_times, y_times):
+def vector_coord_generator(x_times, y_times):
     """
-    Creates a 3-dimensional array (n x 1 x 3) 'coord'
+    Creates a 3-dimensional array (n x 1 x 3) 'vector_coord'
     Where n is the number of atoms in the sheet
     Defined by the unit cell consisting of two atoms,
     one a horizontal translation of the other
+    :param y_times:
+    :param x_times:
     Each atomic coordinate is defined by 3 numbers:
       A x-value (coord_x): As the unit cell is translated horizontally,
                            the x-value increments by 1
@@ -138,9 +137,9 @@ def v_generator(x_times, y_times):
       Where . represents the dot product
     """
 
-    if CHAIN:
+    if p.CHAIN:
         out_inc, in_inc = 1, 1
-    elif BUILD_HOR:
+    elif p.BUILD_HOR:
         out_inc, in_inc = 1, 2
     else:
         out_inc, in_inc = 2, 1
@@ -148,10 +147,11 @@ def v_generator(x_times, y_times):
     #
     # Coordinate Generator
     # TODO: Make it work with odd numbers of atoms on x-axis
+    # TODO: Fix BUILD_HOR, rename j, i, k
     #
 
-    j = np.arange(0, int(x_times if BUILD_HOR else y_times), out_inc)
-    i = np.arange(0, int(y_times if BUILD_HOR else x_times), in_inc)
+    j = np.arange(0, int(x_times if p.BUILD_HOR else y_times), out_inc)
+    i = np.arange(0, int(y_times if p.BUILD_HOR else x_times), in_inc)
     j_shape = j.shape[0]
     i_shape = i.shape[0]
     j = np.repeat(j, i_shape)
@@ -159,74 +159,99 @@ def v_generator(x_times, y_times):
     j = np.reshape(j, (j.shape[0], 1))
     i = np.reshape(i, (i.shape[0], 1))
     k = np.zeros_like(i)
-    coord = np.dstack((j, i, k))
+    vector_coord = np.dstack((j, i, k))
     del j_shape, i_shape, j, i, k
-    if not CHAIN:
-        coord = np.repeat(coord, 2, axis=0)
-        coord[1::2][:, 0, 2] += 1
-        coord[:, 0, 1][np.where(coord[:, 0, 0] % 2 != 0)] += 1
-    x_atoms = (np.amax(coord[:, 0, 0]) + 1) * (2 if not CHAIN else 1)
-    y_atoms = np.amax(coord[:, 0, 1]) + 1
 
-    if TRIM_EDGES:
-        x_max = np.amax(coord[:, 0, 0])
-        idx = ((coord[:, 0, 0] == 0) & (coord[:, 0, 2] == 0)) & \
-              (coord[:, 0, 1] % 2 == 0)
-        idx2 = ((coord[:, 0, 0] == x_max) & (coord[:, 0, 2] == 1)) & \
-               (coord[:, 0, 1] % 2 == (0 if x_times % 2 == 1 else 1))
+    if not p.CHAIN:
+        # Create 'B' sub-lattice
+        vector_coord = np.repeat(vector_coord, 2, axis=0)
+        vector_coord[1::2][:, 0, 2] += 1
+        vector_coord[:, 0, 1][np.where(vector_coord[:, 0, 0] % 2 != 0)] += 1
+
+    num_x_atoms = (np.amax(vector_coord[:, 0, 0]) + 1) * \
+                  (2 if not p.CHAIN else 1)
+    num_y_atoms = np.amax(vector_coord[:, 0, 1]) + 1
+
+    if p.TRIM_EDGES:
+        x_max = np.amax(vector_coord[:, 0, 0])
+        idx = (((vector_coord[:, 0, 0] == 0) & (vector_coord[:, 0, 2] == 0)) &
+              (vector_coord[:, 0, 1] % 2 == 0))
+        idx2 = (((vector_coord[:, 0, 0] == x_max) &
+                 (vector_coord[:, 0, 2] == 1)) &
+                (vector_coord[:, 0, 1] % 2 == (0 if x_times % 2 == 1 else 1)))
         idx = ~(idx | idx2)
-        coord = coord[idx]
+        vector_coord = vector_coord[idx]
 
-    print(np.shape(coord))
+    print(np.shape(vector_coord))
 
-    print("Number of atoms along the x-axis: %s" % str(x_atoms))
-    print("Number of atoms along the y-axis: %s" % str(y_atoms))
+    print("Number of atoms along the x-axis: %s" % str(num_x_atoms))
+    print("Number of atoms along the y-axis: %s" % str(num_y_atoms))
 
+    return vector_coord, num_x_atoms, num_y_atoms
+
+
+def antidot_generator(vector_coord):
     #
     # Antidot Generator
     #
 
-    if COORD2_CREATION or CUT_TYPE:
-        for ii in xrange(ANTIDOT_X_NUM):
-            for jj in xrange(ANTIDOT_Y_NUM):
-                coord_x = ((coord[:, 0, 0] * X_DIST +
-                            coord[:, 0, 2] * Z_DIST).reshape(coord.shape[0], 1))
-                coord_y = (coord[:, 0, 1] * Y_DIST).reshape(coord.shape[0], 1)
+    """
 
-                if CUT_TYPE:
+    :param vector_coord:
+    :return:
+    """
+    if p.XY_COORD_CREATION or p.CUT_TYPE:
+        for x_antidot_num in xrange(p.ANTIDOT_X_NUM):
+            for y_antidot_num in xrange(p.ANTIDOT_Y_NUM):
+                coord_x = ((vector_coord[:, 0, 0] * p.X_DIST +
+                            vector_coord[:, 0, 2] * p.Z_DIST).
+                           reshape(vector_coord.shape[0], 1))
+                coord_y = (vector_coord[:, 0, 1] * p.Y_DIST).\
+                    reshape(vector_coord.shape[0], 1)
+
+                if p.CUT_TYPE:
                     # Get bottom left x and y values
-                    rect_x2 = RECT_X + ii * (BTW_X_DIST + RECT_W)
-                    rect_y2 = RECT_Y + jj * (BTW_Y_DIST + RECT_H)
+                    rect_x2 = p.RECT_X + x_antidot_num * \
+                              (p.BTW_X_DIST + p.RECT_W)
+                    rect_y2 = p.RECT_Y + y_antidot_num * \
+                              (p.BTW_Y_DIST + p.RECT_H)
 
                     # Get top left y value and bottom right x value of rectangle
-                    opp_x = (RECT_X + RECT_W) + ii * (BTW_X_DIST + RECT_W)
-                    opp_y = (RECT_Y + RECT_H) + jj * (BTW_Y_DIST + RECT_H)
+                    opp_x = (p.RECT_X + p.RECT_W) + x_antidot_num * \
+                            (p.BTW_X_DIST + p.RECT_W)
+                    opp_y = (p.RECT_Y + p.RECT_H) + y_antidot_num * \
+                            (p.BTW_Y_DIST + p.RECT_H)
 
                     idx = ((coord_x <= rect_x2) | (coord_x >= opp_x)) | \
                           ((coord_y <= rect_y2) | (coord_y >= opp_y))
-                    n = np.count_nonzero(idx)
-                    coord = coord[idx].reshape(n, 1, 3)
-                    if COORD2_CREATION:
-                        coord2 = np.hstack((coord_x[idx].reshape(n, 1),
-                                            coord_y[idx].reshape(n, 1)))
-                elif COORD2_CREATION:   # and not CUT_TYPE is assumed
-                    coord2 = np.hstack((coord_x, coord_y))
-                    return coord, coord2, x_atoms, y_atoms
+                    num_atoms = np.count_nonzero(idx)
+                    vector_coord = vector_coord[idx].reshape(num_atoms, 1, 3)
+                    if p.XY_COORD_CREATION:
+                        xy_coord = np.hstack((coord_x[idx].
+                                              reshape(num_atoms, 1),
+                                              coord_y[idx].
+                                              reshape(num_atoms, 1)))
+                elif p.XY_COORD_CREATION:   # and not CUT_TYPE is assumed
+                    xy_coord = np.hstack((coord_x, coord_y))
+                    return vector_coord, xy_coord
 
         # Save as a MATLAB file for easy viewing
-        # sio.savemat('coord.mat', {'coord': coord}, oned_as='column')
+        # sio.savemat('vector_coord.mat', {'vector_coord': vector_coord},
+        # oned_as='column')
 
         # Save xyz coordinates to graphenecoordinates.txt
-        np.savetxt('graphenecoordinates.txt', coord2, delimiter='\t', fmt='%f')
-        if COORD2_CREATION:
-            return coord, coord2, x_atoms, y_atoms
+        np.savetxt('graphenecoordinates.txt', xy_coord,
+                   delimiter='\t', fmt='%f')
+        if p.XY_COORD_CREATION:
+            return vector_coord, xy_coord
 
-    return coord, x_atoms, y_atoms
+    return vector_coord
 
 
-def plot_graphene(coord2):
+def plot_graphene_lattice(coord2):
     """
     Plot the graphene sheet
+    :param coord2:
     """
     # Plot xy coordinates
     plt.figure(1)
@@ -242,43 +267,51 @@ def plot_graphene(coord2):
 
 
 def dos_calculator(coord, x_atoms, y_atoms):
-    length = np.amax(coord[:, 0, 0]) * X_DIST + Z_DIST
-    width = np.amax(coord[:, 0, 1]) * Y_DIST
-    # Generate Hamiltonian
-    (H, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
-    print(H)
-    del coord
-    np.save('H', H)
-    del H
+    """
 
-    if BINNING:
+    :param coord:
+    :param x_atoms:
+    :param y_atoms:
+    """
+    length = np.amax(coord[:, 0, 0]) * p.X_DIST + p.Z_DIST
+    width = np.amax(coord[:, 0, 1]) * p.Y_DIST
+    # Generate Hamiltonian
+    (hamiltonian, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
+    print(hamiltonian)
+    del coord
+    np.save('hamiltonian', hamiltonian)
+    del hamiltonian
+
+    if p.BINNING:
         # Number of bins
-        Nb = 40
+        num_data_points = 40
     else:
-        Nb = (6 * T) / atoms
+        # Number of data points
+        num_data_points = (6 * p.T) / atoms
 
     # Min and Max Energy Values
-    E_min = -3 * T
-    E_max = 3 * T
+    min_energy = -3 * p.T
+    max_energy = 3 * p.T
 
-    if BINNING:
+    if p.BINNING:
         # Energy Levels to bin density of states at
-        E = np.linspace(E_min, E_max, Nb)
+        energy_levels = np.linspace(min_energy, max_energy, num_data_points)
     else:
         # Energy Levels to calculate density of states at
-        E = np.arange(E_min, E_max + Nb, Nb)
+        energy_levels = np.arange(min_energy,
+                                  max_energy + num_data_points, num_data_points)
 
-    if PERIODIC_BOUNDARY:
+    if p.PERIODIC_BOUNDARY:
         eigenvalues = np.array([])
         marker = 0
 
         # k vectors
         k_min = 0
-        k_max = (2 * np.pi) / A
-        k_points = 50
-        x = np.linspace(k_min, k_max, k_points)
-        y = np.linspace(k_min, k_max, k_points)
-        kx, ky = np.meshgrid(x, y)
+        k_max = (2 * np.pi) / p.A
+        num_k_points = 50
+        x_points = np.linspace(k_min, k_max, num_k_points)
+        y_points = np.linspace(k_min, k_max, num_k_points)
+        kx_points, ky_points = np.meshgrid(x_points, y_points)
 
         # length and width of the graphene sheet
         dists = np.array([length, width])
@@ -286,60 +319,76 @@ def dos_calculator(coord, x_atoms, y_atoms):
         # Progress Bar
         widgets = [Percentage(), ' ', Bar('>'), ' K vectors done: ', Counter(),
                    ' ', ETA(), ' ', Timer()]
-        pbar = ProgressBar(widgets=widgets, maxval=(k_points ** 2)).start()
+        pbar = ProgressBar(widgets=widgets, maxval=(num_k_points ** 2)).start()
 
-        for k in np.array(zip(kx.ravel(), ky.ravel())):
-            r = k * dists
-            left_phase_factor = T * np.e ** (-1j * np.dot(k, r))
-            right_phase_factor = T * np.e ** (1j * np.dot(k, r))
-            H = np.load('H.npy')
-            H = H.astype(np.complex, copy=False)
-            iu = np.triu_indices(H.shape[0])
-            H[iu] = np.dot(H[iu], right_phase_factor)
-            del iu
-            il = np.tril_indices(H.shape[0])
-            H[il] = np.dot(H[il], left_phase_factor)
-            del il
-            eigenvalues = np.append(eigenvalues, linalg.eigvals(H))
+        k_vector = None
+        for k_vector in np.array(zip(kx_points.ravel(), ky_points.ravel())):
+            r_vector = k_vector * dists
+
+            left_phase_factor = p.T * np.e ** (-1j * np.dot(k_vector, r_vector))
+            right_phase_factor = p.T * np.e ** (1j * np.dot(k_vector, r_vector))
+
+            hamiltonian = np.load('hamiltonian.npy')
+            hamiltonian = hamiltonian.astype(np.complex, copy=False)
+
+            upper_triangle_index = np.triu_indices(hamiltonian.shape[0])
+
+            hamiltonian[upper_triangle_index] = np.dot(
+                hamiltonian[upper_triangle_index], right_phase_factor)
+            del upper_triangle_index
+
+            lower_triangle_index = np.tril_indices(hamiltonian.shape[0])
+            hamiltonian[lower_triangle_index] = np.dot(
+                hamiltonian[lower_triangle_index], left_phase_factor)
+            del lower_triangle_index
+
+            eigenvalues = np.append(eigenvalues, linalg.eigvals(hamiltonian))
             # if not marker:
-            #     N = dos_eig(H, E, E_min, E_max, Nb, atoms)
+            #     density_of_states = dos_eig(hamiltonian, energy_levels,
+            # min_energy, max_energy, num_data_points)
             #     marker += 1
             # else:
-            #     N += dos_eig(H, E, E_min, E_max, Nb, atoms)
+            #     density_of_states += dos_eig(hamiltonian, energy_levels,
+            # min_energy, max_energy, num_data_points)
             #     marker += 1
             marker += 1
             pbar.update(marker)
         pbar.finish()
-        N = dos_eig(E, E_min, E_max, Nb, eigenvalues)
+        density_of_states = dos_eig(energy_levels, min_energy, max_energy,
+                    num_data_points, eigenvalues)
     else:
         # Calculate Density of States
-        N = dos_eig(H, E, E_min, E_max, Nb, atoms)
+        eigenvalues = linalg.eigvals(hamiltonian)
+        density_of_states = dos_eig(energy_levels, min_energy,
+                    max_energy, num_data_points, eigenvalues)
 
-    sio.savemat('Hphase.mat', {'H': H}, oned_as='column')
-    print(k)
-    print(r)
+    sio.savemat('Hphase.mat', {'hamiltonian': hamiltonian}, oned_as='column')
+    print(k_vector)
+    print(r_vector)
     print(left_phase_factor, right_phase_factor)
-    print(left_phase_factor * T, right_phase_factor * T)
-    N = N / atoms
-    # data = np.column_stack((E, N))
+    print(left_phase_factor * p.T, right_phase_factor * p.T)
+    density_of_states /= (atoms * num_k_points)
+    # data = np.column_stack((energy_levels, density_of_states))
     # np.savetxt('pythonEigenvalues.txt', eigenvalues, delimiter='\t', fmt='%f')
     # np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
-    # np.savetxt('pythonDoSBroad.txt', N, delimiter='\t', fmt='%f')
-    np.save('Ndata', N)
+    # np.savetxt('pythonDoSBroad.txt', density_of_states, delimiter='\t',
+    # fmt='%f')
+    np.save('Ndata', density_of_states)
 
     # dos()
     plt.figure(2)
     font = {'size': 22}
     plt.rc('font', **font)
-    plt.plot(E, N)
+    plt.plot(energy_levels, density_of_states)
     plt.grid(True)
     plt.xlabel('Energy (eV)', fontsize=24)
     plt.ylabel('Density of States', fontsize=24)
     plt.title('Density of States vs Energy',
               horizontalalignment='center', fontsize=40)
     # plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, '
-    #                     'Gamma: %s\n Size: %s x %s angstroms'
-    #                     % (Ne, E.shape[0] - 1, gamma, WIDTH, HEIGHT))
+    #                     'Gamma: %s\n Size: %s x_points %s angstroms'
+    #                     % (Ne, energy_levels.shape[0] - 1, gamma, WIDTH,
+    #                        HEIGHT))
     plt.draw()
 
     print("DoS calculation complete")
@@ -350,12 +399,17 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     Generates the Hamiltonian of the sheet
     Uses t = -2.7 eV as the interaction (hopping) parameter
     Only does nearest-neighbor calculations
+    :param y_atoms:
+    :param x_atoms:
+    :param coord:
     """
 
     print("Start Ham calc")
-    max_size = 16000     # Keep arrays at max size of around 2 GB.
+    max_size = 16000     # Keep idx array at max size of around 2 GB.
                          # Also limits lattice to ~1969 nm.
-    diff = y_atoms if BUILD_HOR else x_atoms
+
+    # All nearest-neighbor atoms exist within diff atoms of an atom
+    diff = y_atoms if p.BUILD_HOR else x_atoms
     num = coord.shape[0]    # Number of atoms in the lattice
     print("num = " + str(num))
 
@@ -364,40 +418,44 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     else:
         chunks = np.floor(num / max_size + 1)
 
-    if ON_SITE:
-        # To try to translate delta function at 0,
-        # add on-site energies to not fully bonded atoms (edge atoms)
-        left_edge = np.nonzero(coord[:, 0, 0] == 0)[0]
-        left_edge = left_edge[::2]  # All border atoms on left edge
-        right_edge = np.nonzero(coord[:, 0, 0] == np.amax(coord[:, 0, 0]))[0]
-        right_edge = right_edge[1::2]   # All border atoms on right edge
+    # To try to translate delta function at 0,
+    # add on-site energies to not fully bonded atoms (edge atoms)
+    left_edge = np.nonzero(coord[:, 0, 0] == 0)[0]
+    left_edge = left_edge[::2]  # All border atoms on left edge
+    right_edge = np.nonzero(coord[:, 0, 0] == np.amax(coord[:, 0, 0]))[0]
+    right_edge = right_edge[1::2]   # All border atoms on right edge
+    top_edge = np.nonzero(coord[:, 0, 1] == y_atoms - 1)[0]
+    bottom_edge = np.nonzero(coord[:, 0, 1] == 0)[0]
 
+    row_data = np.array([])
+    col_data = np.array([])
     for i in xrange(int(chunks)):
         bound1 = i * max_size - i * diff
         bound2 = (i + 1) * max_size - i * diff
+
+        # Following code snippet credit Jaime - StackOverflow
+        # stackoverflow.com/questions/17792077/vectorizing-for-loops-numpy/17793222
         idx = ((np.abs(coord[bound1:bound2, 0, 0] -
                        coord[bound1:bound2, 0, 0, None]) <= 2) &
                (np.abs(coord[bound1:bound2, 0, 1] -
                        coord[bound1:bound2, 0, 1, None]) <= 1))
         rows, cols = np.nonzero(idx)
-        x_arr = ((coord[rows, 0, 0] - coord[cols, 0, 0]) * X_DIST +
-                 (coord[rows, 0, 2] - coord[cols, 0, 2]) * Z_DIST)
-        y_arr = (coord[rows, 0, 1] - coord[cols, 0, 1]) * Y_DIST
-        r2 = x_arr * x_arr + y_arr * y_arr
+        x_arr = ((coord[rows, 0, 0] - coord[cols, 0, 0]) * p.X_DIST +
+                 (coord[rows, 0, 2] - coord[cols, 0, 2]) * p.Z_DIST)
+        y_arr = (coord[rows, 0, 1] - coord[cols, 0, 1]) * p.Y_DIST
+        dist_squared = x_arr * x_arr + y_arr * y_arr
 
-        idx = ((A - 0.5) ** 2 <= r2) & (r2 <= (A + 0.5) ** 2)
+        idx = (((p.A - 0.5) ** 2 <= dist_squared) &
+               (dist_squared <= (p.A + 0.5) ** 2))
 
         rows, cols = rows[idx], cols[idx]
 
-        try:
-            row_data = np.hstack((row_data, rows + bound1))
-            col_data = np.hstack((col_data, cols + bound1))
-        except NameError:
-            row_data = rows + bound1
-            col_data = cols + bound1
-    del idx, rows, cols, r2
+        row_data = np.hstack((row_data, rows + bound1))
+        col_data = np.hstack((col_data, cols + bound1))
 
-    if PERIODIC_BOUNDARY:
+    del idx, rows, cols, dist_squared
+
+    if p.PERIODIC_BOUNDARY:
         # Horizontal border
         x_max = np.amax(coord[:, 0, 0])
         coord2 = coord.copy()
@@ -405,12 +463,13 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
         idx = ((np.abs(coord2[:, 0, 0] - coord2[:, 0, 0, None]) <= 2) &
                (np.abs(coord2[:, 0, 1] - coord2[:, 0, 1, None]) <= 1))
         rows, cols = np.nonzero(idx)
-        x_arr = ((coord2[rows, 0, 0] - coord2[cols, 0, 0]) * X_DIST +
-                 (coord2[rows, 0, 2] - coord2[cols, 0, 2]) * Z_DIST)
-        y_arr = (coord2[rows, 0, 1] - coord2[cols, 0, 1]) * Y_DIST
-        r2 = x_arr * x_arr + y_arr * y_arr
+        x_arr = ((coord2[rows, 0, 0] - coord2[cols, 0, 0]) * p.X_DIST +
+                 (coord2[rows, 0, 2] - coord2[cols, 0, 2]) * p.Z_DIST)
+        y_arr = (coord2[rows, 0, 1] - coord2[cols, 0, 1]) * p.Y_DIST
+        dist_squared = x_arr * x_arr + y_arr * y_arr
 
-        idx = ((A - 0.5) ** 2 <= r2) & (r2 <= (A + 0.5) ** 2)
+        idx = ((p.A - 0.5) ** 2 <= dist_squared) & \
+              (dist_squared <= (p.A + 0.5) ** 2)
 
         rows, cols = rows[idx], cols[idx]
 
@@ -424,58 +483,77 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
         idx = ((np.abs(coord2[:, 0, 0] - coord2[:, 0, 0, None]) <= 2) &
                (np.abs(coord2[:, 0, 1] - coord2[:, 0, 1, None]) <= 1))
         rows, cols = np.nonzero(idx)
-        x_arr = ((coord2[rows, 0, 0] - coord2[cols, 0, 0]) * X_DIST +
-                 (coord2[rows, 0, 2] - coord2[cols, 0, 2]) * Z_DIST)
-        y_arr = (coord2[rows, 0, 1] - coord2[cols, 0, 1]) * Y_DIST
-        r2 = x_arr * x_arr + y_arr * y_arr
+        x_arr = ((coord2[rows, 0, 0] - coord2[cols, 0, 0]) * p.X_DIST +
+                 (coord2[rows, 0, 2] - coord2[cols, 0, 2]) * p.Z_DIST)
+        y_arr = (coord2[rows, 0, 1] - coord2[cols, 0, 1]) * p.Y_DIST
+        dist_squared = x_arr * x_arr + y_arr * y_arr
 
-        idx = ((A - 0.5) ** 2 <= r2) & (r2 <= (A + 0.5) ** 2)
+        idx = ((p.A - 0.5) ** 2 <= dist_squared) & \
+              (dist_squared <= (p.A + 0.5) ** 2)
 
         rows, cols = rows[idx], cols[idx]
 
         row_data = np.hstack((row_data, rows))
         col_data = np.hstack((col_data, cols))
 
-    if ON_SITE:
+    if p.ON_SITE:
         row_data = np.concatenate((row_data, left_edge, right_edge))
         col_data = np.concatenate((col_data, left_edge, right_edge))
-        coords = np.hstack((row_data[:, None], col_data[:, None]))
-        coords = np.array(list(set(tuple(c) for c in coords)))
-        data = np.concatenate((np.repeat(-2.7, coords.shape[0]),
+        sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
+        sparse_coords = np.array(list(set(tuple(c) for c in sparse_coords)))
+        data = np.concatenate((np.repeat(-2.7, sparse_coords.shape[0]),
                                np.repeat(-2.7, left_edge.shape[0]),
                                np.repeat(2.7, right_edge.shape[0])))
     else:
-        coords = np.hstack((row_data[:, None], col_data[:, None]))
-        coords = np.array(list(set(tuple(c) for c in coords)))
-        data = np.repeat(-T, coords.shape[0])
+        sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
+        print(sparse_coords)
+        idx = [(np.any(sparse_coords[i, 0] == bottom_edge) and
+               np.any(sparse_coords[i, 1] == top_edge)) or
+               (np.any(sparse_coords[i, 0] == top_edge) and
+               np.any(sparse_coords[i, 1] == bottom_edge))
+               for i in xrange(sparse_coords.shape[0])]
+        idx = np.array(idx)
+        idx2 = [(np.any(sparse_coords[i, 0] == left_edge) and
+                np.any(sparse_coords[i, 1] == right_edge)) or
+                (np.any(sparse_coords[i, 0] == right_edge) and
+                np.any(sparse_coords[i, 1] == left_edge))
+                for i in xrange(sparse_coords.shape[0])]
+        idx = idx | idx2
+        idx = sparse_coords[idx].copy()
+        idx = np.array(list(set(tuple(c) for c in idx)))
+        sparse_coords = np.array(list(set(tuple(c) for c in sparse_coords)))
+        sparse_coords = np.append(sparse_coords, idx, axis=0)
+        data = np.repeat(-p.T, sparse_coords.shape[0])
         # When simulating periodic boundary conditions,
         # corner atoms become double bonded to each other
-        idx = [i for i in xrange(rows.size)
-               if ((rows[i] == 0 and cols[i] == coord.shape[0] - 1) or
-                   (cols[i] == 0 and rows[i] == coord.shape[0] - 1))]
-        data[idx] *= 2
-    H = sparse.coo_matrix((data, (coords[:, 0], coords[:, 1])),
-                          shape=(num, num)).tocsc()
+        # idx = [i for i in xrange(sparse_coords.shape[0])
+        # if ((sparse_coords[i, 0] == 0 and
+        #       sparse_coords[i, 1] == coord.shape[0] - 1) or
+        #     (sparse_coords[i, 1] == 0 and
+        #       sparse_coords[i, 0] == coord.shape[0] - 1))]
+        # data[idx] *= 2
+    hamiltonian = sparse.coo_matrix((data, (sparse_coords[:, 0],
+                                            sparse_coords[:, 1])),
+                                    shape=(num, num)).tocsc()
 
-    H = H.todense()
+    hamiltonian = hamiltonian.todense()
 
     # if ON_SITE:
-    count = 0
     for i in xrange(num):
-        if np.nonzero(H[i, :])[0].shape[1] < 3:
-            if np.nonzero(H[:, i])[0].shape[1] < 3:
-                count += 1
+        if np.nonzero(hamiltonian[i, :])[0].shape[1] < 3:
+            if np.nonzero(hamiltonian[:, i])[0].shape[1] < 3:
                 print(i)
 
     # Save as a MATLAB file for easy viewing
-    sio.savemat('H.mat', {'H': H}, oned_as='column')
+    sio.savemat('hamiltonian.mat', {'hamiltonian': hamiltonian},
+                oned_as='column')
 
     # Help save memory
     garcol.collect()
 
     print("End Ham calc")
 
-    return H, num
+    return hamiltonian, num
 
 
 def dos():
@@ -484,53 +562,59 @@ def dos():
     using the "binning" method
     """
 
-    Nb = 101                # Number of bins
-    Nkx = 186               # Number of k vectors on x
-    Nky = 164               # Number of k vectors on y
+    num_bins = 101
+    num_kx_points = 186               # Number of k vectors on x
+    num_ky_points = 164               # Number of k vectors on y
 
-    DoS = np.zeros(Nb)      # Initialize DoS
+    density_of_states = np.zeros(num_bins)      # Initialize DoS
 
     # Min and Max Energy Values
-    E_min = -10
-    E_max = 10
+    min_energy = -10
+    max_energy = 10
 
-    a = 2.461
+    lattice_const = 2.461
 
     # k vectors
-    kx = np.linspace((-4 * np.pi) / (2 * a * np.sqrt(3)),
-                     (4 * np.pi) / (2 * a * np.sqrt(3)), num=Nkx)
-    ky = np.linspace((-4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)),
-                     (4 * np.pi * np.sqrt(3)) / (2 * a * np.sqrt(3)), num=Nky)
-    if BINNING:
-        E = np.linspace(E_min, E_max, num=Nb)
+    k_x_component = np.linspace((-4 * np.pi) / (2 * lattice_const * np.sqrt(3)),
+                                (4 * np.pi) / (2 * lattice_const * np.sqrt(3)),
+                                num=num_kx_points)
+    k_y_component = np.linspace((-4 * np.pi * np.sqrt(3)) /
+                                (2 * lattice_const * np.sqrt(3)),
+                                (4 * np.pi * np.sqrt(3)) /
+                                (2 * lattice_const * np.sqrt(3)),
+                                num=num_ky_points)
+    if p.BINNING:
+        energy_levels = np.linspace(min_energy, max_energy, num=num_bins)
 
         # Energy increment
-        inc = (E_max - E_min) / Nb
+        increment = (max_energy - min_energy) / num_bins
     # else:
-    #     Nb = (6 * T) / atoms
-    for i in kx:
-        for j in ky:
+    #     num_bins = (6 * T) / atoms
+    for i in k_x_component:
+        for j in k_y_component:
             # Energy Dispersion - Calculate positive and negative
-            e = T * np.sqrt(1 + 4 * np.cos((np.sqrt(3) * i * a) / 2) *
-                            np.cos((j * a) / 2) + 4 *
-                            (np.cos((j * a) / 2)) ** 2)
-            e2 = -e
-            if BINNING:
+            energy = p.T * np.sqrt(1 + 4 *
+                                   np.cos((np.sqrt(3) * i *
+                                          lattice_const) / 2) *
+                                   np.cos((j * lattice_const) / 2) +
+                                   4 * (np.cos((j * lattice_const) / 2)) ** 2)
+            energy2 = -energy
+            if p.BINNING:
                 # Find bins
-                b = np.floor((e - E_min) / inc)
-                b2 = np.floor((e2 - E_min) / inc)
+                bin1 = np.floor((energy - min_energy) / increment)
+                bin2 = np.floor((energy2 - min_energy) / increment)
 
                 # Tally bins
                 try:
-                    DoS[b] += 1
+                    density_of_states[bin1] += 1
                 except IndexError:
                     pass
                 try:
-                    DoS[b2] += 1
+                    density_of_states[bin2] += 1
                 except IndexError:
                     pass
 
-    # data = np.column_stack((E, DoS))
+    # data = np.column_stack((energy_levels, density_of_states))
     # np.savetxt('DataTxt/pythonDoSData-Theo.txt', data,
                # delimiter='\t', fmt='%f')
 
@@ -538,7 +622,7 @@ def dos():
     font = {'family': 'normal',
             'size': 22}
     plt.rc('font', **font)
-    plt.plot(E, DoS)
+    plt.plot(energy_levels, density_of_states)
     plt.grid(True)
     plt.xlabel('Energy (eV)', fontsize=24)
     plt.ylabel('Density of States', fontsize=24)
@@ -546,60 +630,69 @@ def dos():
     plt.show()
 
 
-def dos_eig(E, E_min, E_max, Nb, eigenvalues):
+def dos_eig(energy_levels, min_energy, max_energy, num_bins, eigenvalues):
     """
     Calculate the density of states across the graphene sheet
-    by solving Schrodinger's equation
+    by solving Schrödinger's equation
+    :param eigenvalues:
+    :param num_bins:
+    :param max_energy:
+    :param min_energy:
+    :param energy_levels:
     """
 
-    Ne = np.size(eigenvalues)
-
-    N = np.empty(E.shape[0])                     # Initialize N
+    density_of_states = np.empty(energy_levels.shape[0])
 
     # Disregard imaginary part - eigenvalues are 'a + 0i' form
     # eigenvalues = np.real(eigenvalues)
 
-    if BINNING:
+    if p.BINNING:
         # Binning Method
         # Energy increment
-        inc = (E_max - E_min) / Nb
-        for e in eigenvalues:
-            e2 = -e
+        inc = (max_energy - min_energy) / num_bins
+        for energy in eigenvalues:
+            energy2 = -energy
 
             # Find bins
-            b = np.floor((e - E_min) / inc)
-            b2 = np.floor((e2 - E_min) / inc)
+            bin1 = np.floor((energy - min_energy) / inc)
+            bin2 = np.floor((energy2 - min_energy) / inc)
 
             # Tally bins (-1 because Python indexing starts at 0)
             try:
-                N[b] += 1
+                density_of_states[bin1] += 1
             except IndexError:
                 pass
             try:
-                N[b2] += 1
+                density_of_states[bin2] += 1
             except IndexError:
                 pass
 
     else:
         # Broadening Method
-        gamma = 3 * Nb
-        for e in xrange(E.shape[0]):
+        gamma = 3 * num_bins
+        for energy in xrange(energy_levels.shape[0]):
             # Lorentzian (broadening) function -
             # gamma changes the broadening amount
             # Used to broaden the delta functions
             # Also normalizes the density of states
-            N[e] = np.sum((1 / np.pi) * (gamma / (((E[e] - eigenvalues) ** 2)
-                                                  + (gamma ** 2))))
+            density_of_states[energy] = np.sum((1 / np.pi) *
+                                               (gamma / (((energy_levels[energy]
+                                                           - eigenvalues) ** 2)
+                                                         + (gamma ** 2))))
 
-    return N
+    return density_of_states
 
 
 def main():
     # Generate Coordinates
-    (coord, x_atoms, y_atoms) = coord_generator()
+    """
+
+    TODO: Fill this out
+    """
+    (vector_coord, num_x_atoms, num_y_atoms) = generator_wrapper()
 
     # Calculate Hamiltonian and Density of States
-    dos_calculator(coord, x_atoms, y_atoms)
+    dos_calculator(vector_coord, num_x_atoms, num_y_atoms)
 
     plt.show()
 
