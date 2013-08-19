@@ -92,9 +92,6 @@ def generator_wrapper():
     else:
         x_times, y_times = p.WIDTH, p.HEIGHT
 
-    print("Parameters calculated:")
-    print("x_times: %s" % str(x_times))
-    print("y_times: %s" % str(y_times))
     print("Beginning coordinate generation")
     if p.XY_COORD_CREATION:
         (vector_coord,
@@ -102,7 +99,9 @@ def generator_wrapper():
         vector_coord, xy_coord = antidot_generator(vector_coord)
         print("Coordinate generation finished")
         if p.PLOT_OPTION:
-            plot_graphene_lattice(xy_coord)
+            plot_data(1, xy_coord[:, 0], xy_coord[:, 1],
+                      'Length (Angstroms)', 'Width (Angstroms)',
+                      'Graphene Antidot Lattice', plot=1)
             print("Graphene plot drawn")
             del xy_coord
     else:
@@ -127,7 +126,7 @@ def vector_coord_generator(x_times, y_times):
                            the x-value increments by 1
       A y-value (coord_y): As the unit cell is translated vertically,
                            the y-value increments by 1
-      A unit cell value (coord_u): Declares atom's sub-lattice
+      A lattice value (coord_l): Declares atom's sub-lattice
           0 = the atom on the left (A sub-lattice)
           1 = the atom on the right (B sub-lattice)
     To convert these numbers into xyz coordinates,
@@ -147,20 +146,20 @@ def vector_coord_generator(x_times, y_times):
     #
     # Coordinate Generator
     # TODO: Make it work with odd numbers of atoms on x-axis
-    # TODO: Fix BUILD_HOR, rename j, i, k
+    # TODO: Fix BUILD_HOR, rename tmp_x, tmp_y, tmp_l
     #
 
-    j = np.arange(0, int(x_times if p.BUILD_HOR else y_times), out_inc)
-    i = np.arange(0, int(y_times if p.BUILD_HOR else x_times), in_inc)
-    j_shape = j.shape[0]
-    i_shape = i.shape[0]
-    j = np.repeat(j, i_shape)
-    i = np.tile(i, j_shape)
-    j = np.reshape(j, (j.shape[0], 1))
-    i = np.reshape(i, (i.shape[0], 1))
-    k = np.zeros_like(i)
-    vector_coord = np.dstack((j, i, k))
-    del j_shape, i_shape, j, i, k
+    tmp_x = np.arange(0, int(x_times if p.BUILD_HOR else y_times), out_inc)
+    tmp_y = np.arange(0, int(y_times if p.BUILD_HOR else x_times), in_inc)
+    tmp_x_shape = tmp_x.shape[0]
+    tmp_y_shape = tmp_y.shape[0]
+    tmp_x = np.repeat(tmp_x, tmp_y_shape)
+    tmp_y = np.tile(tmp_y, tmp_x_shape)
+    tmp_x = np.reshape(tmp_x, (tmp_x.shape[0], 1))
+    tmp_y = np.reshape(tmp_y, (tmp_y.shape[0], 1))
+    tmp_l = np.zeros_like(tmp_y)
+    vector_coord = np.dstack((tmp_x, tmp_y, tmp_l))
+    del tmp_x_shape, tmp_y_shape, tmp_x, tmp_y, tmp_l
 
     if not p.CHAIN:
         # Create 'B' sub-lattice
@@ -182,8 +181,7 @@ def vector_coord_generator(x_times, y_times):
         idx = ~(idx | idx2)
         vector_coord = vector_coord[idx]
 
-    print(np.shape(vector_coord))
-
+    print("Number of atoms: %s" % str(vector_coord.shape[0]))
     print("Number of atoms along the x-axis: %s" % str(num_x_atoms))
     print("Number of atoms along the y-axis: %s" % str(num_y_atoms))
 
@@ -248,24 +246,6 @@ def antidot_generator(vector_coord):
     return vector_coord
 
 
-def plot_graphene_lattice(coord2):
-    """
-    Plot the graphene sheet
-    :param coord2:
-    """
-    # Plot xy coordinates
-    plt.figure(1)
-    font = {'size': 22}
-    plt.rc('font', **font)
-    # Use plot() = line graph, scatter() = point graph
-    plt.scatter(coord2[:, 0], coord2[:, 1], marker='o')
-    plt.grid(True)
-    plt.xlabel('Length (Angstroms)', fontsize=24)
-    plt.ylabel('Width (Angstroms)', fontsize=24)
-    plt.title('Graphene Antidot Lattice', fontsize=40)
-    plt.draw()
-
-
 def dos_calculator(coord, x_atoms, y_atoms):
     """
 
@@ -276,11 +256,9 @@ def dos_calculator(coord, x_atoms, y_atoms):
     length = np.amax(coord[:, 0, 0]) * p.X_DIST + p.Z_DIST
     width = np.amax(coord[:, 0, 1]) * p.Y_DIST
     # Generate Hamiltonian
-    (hamiltonian, atoms) = v_hamiltonian(coord, x_atoms, y_atoms)
-    print(hamiltonian)
+    (hamiltonian, atoms) = hamiltonian_calculator(coord, x_atoms, y_atoms)
     del coord
     np.save('hamiltonian', hamiltonian)
-    del hamiltonian
 
     if p.BINNING:
         # Number of bins
@@ -302,6 +280,8 @@ def dos_calculator(coord, x_atoms, y_atoms):
                                   max_energy + num_data_points, num_data_points)
 
     if p.PERIODIC_BOUNDARY:
+        del hamiltonian
+
         eigenvalues = np.array([])
         marker = 0
 
@@ -354,47 +334,34 @@ def dos_calculator(coord, x_atoms, y_atoms):
             marker += 1
             pbar.update(marker)
         pbar.finish()
-        density_of_states = dos_eig(energy_levels, min_energy, max_energy,
-                    num_data_points, eigenvalues)
+        # density_of_states = dos_eig(energy_levels, min_energy, max_energy,
+        #                             num_data_points, eigenvalues)
     else:
         # Calculate Density of States
         eigenvalues = linalg.eigvals(hamiltonian)
         density_of_states = dos_eig(energy_levels, min_energy,
-                    max_energy, num_data_points, eigenvalues)
+                                    max_energy, num_data_points, eigenvalues)
 
-    sio.savemat('Hphase.mat', {'hamiltonian': hamiltonian}, oned_as='column')
-    print(k_vector)
-    print(r_vector)
-    print(left_phase_factor, right_phase_factor)
-    print(left_phase_factor * p.T, right_phase_factor * p.T)
-    density_of_states /= (atoms * num_k_points)
+    # sio.savemat('Hphase.mat', {'hamiltonian': hamiltonian}, oned_as='column')
+    # print(k_vector)
+    # print(r_vector)
+    # print(left_phase_factor, right_phase_factor)
+    # print(left_phase_factor * p.T, right_phase_factor * p.T)
+    # density_of_states /= (atoms * num_k_points)
     # data = np.column_stack((energy_levels, density_of_states))
     # np.savetxt('pythonEigenvalues.txt', eigenvalues, delimiter='\t', fmt='%f')
     # np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
     # np.savetxt('pythonDoSBroad.txt', density_of_states, delimiter='\t',
     # fmt='%f')
-    np.save('Ndata', density_of_states)
+    # np.save('Ndata', density_of_states)
 
-    # dos()
-    plt.figure(2)
-    font = {'size': 22}
-    plt.rc('font', **font)
-    plt.plot(energy_levels, density_of_states)
-    plt.grid(True)
-    plt.xlabel('Energy (eV)', fontsize=24)
-    plt.ylabel('Density of States', fontsize=24)
-    plt.title('Density of States vs Energy',
-              horizontalalignment='center', fontsize=40)
-    # plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, '
-    #                     'Gamma: %s\n Size: %s x_points %s angstroms'
-    #                     % (Ne, energy_levels.shape[0] - 1, gamma, WIDTH,
-    #                        HEIGHT))
-    plt.draw()
-
+    plot_data(2, energy_levels, density_of_states,
+              'Energy (eV)', 'Density of States',
+              'Density of States vs Energy', plot=0)
     print("DoS calculation complete")
 
 
-def v_hamiltonian(coord, x_atoms, y_atoms):
+def hamiltonian_calculator(coord, x_atoms, y_atoms):
     """
     Generates the Hamiltonian of the sheet
     Uses t = -2.7 eV as the interaction (hopping) parameter
@@ -404,14 +371,13 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
     :param coord:
     """
 
-    print("Start Ham calc")
+    print("Beginning hamiltonian calculation")
     max_size = 16000     # Keep idx array at max size of around 2 GB.
                          # Also limits lattice to ~1969 nm.
 
     # All nearest-neighbor atoms exist within diff atoms of an atom
     diff = y_atoms if p.BUILD_HOR else x_atoms
     num = coord.shape[0]    # Number of atoms in the lattice
-    print("num = " + str(num))
 
     if num / y_atoms <= max_size:
         chunks = 1
@@ -504,9 +470,11 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
         data = np.concatenate((np.repeat(-2.7, sparse_coords.shape[0]),
                                np.repeat(-2.7, left_edge.shape[0]),
                                np.repeat(2.7, right_edge.shape[0])))
-    else:
+    elif p.PERIODIC_BOUNDARY:
         sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
-        print(sparse_coords)
+
+        # When simulating periodic boundary conditions,
+        # some edge atoms become double bonded to each other
         idx = [(np.any(sparse_coords[i, 0] == bottom_edge) and
                np.any(sparse_coords[i, 1] == top_edge)) or
                (np.any(sparse_coords[i, 0] == top_edge) and
@@ -522,10 +490,13 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
         idx = sparse_coords[idx].copy()
         idx = np.array(list(set(tuple(c) for c in idx)))
         sparse_coords = np.array(list(set(tuple(c) for c in sparse_coords)))
+        print(idx)
+        print(sparse_coords)
         sparse_coords = np.append(sparse_coords, idx, axis=0)
-        data = np.repeat(-p.T, sparse_coords.shape[0])
-        # When simulating periodic boundary conditions,
-        # corner atoms become double bonded to each other
+    else:
+        sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
+
+    data = np.repeat(-p.T, sparse_coords.shape[0])
         # idx = [i for i in xrange(sparse_coords.shape[0])
         # if ((sparse_coords[i, 0] == 0 and
         #       sparse_coords[i, 1] == coord.shape[0] - 1) or
@@ -538,20 +509,20 @@ def v_hamiltonian(coord, x_atoms, y_atoms):
 
     hamiltonian = hamiltonian.todense()
 
-    # if ON_SITE:
-    for i in xrange(num):
-        if np.nonzero(hamiltonian[i, :])[0].shape[1] < 3:
-            if np.nonzero(hamiltonian[:, i])[0].shape[1] < 3:
-                print(i)
+    if p.ON_SITE:
+        for i in xrange(num):
+            if np.nonzero(hamiltonian[i, :])[0].shape[1] < 3:
+                if np.nonzero(hamiltonian[:, i])[0].shape[1] < 3:
+                    print(i)
 
     # Save as a MATLAB file for easy viewing
     sio.savemat('hamiltonian.mat', {'hamiltonian': hamiltonian},
                 oned_as='column')
 
+    print("Hamiltonian calculation finished")
+
     # Help save memory
     garcol.collect()
-
-    print("End Ham calc")
 
     return hamiltonian, num
 
@@ -618,16 +589,9 @@ def dos():
     # np.savetxt('DataTxt/pythonDoSData-Theo.txt', data,
                # delimiter='\t', fmt='%f')
 
-    plt.figure(2)
-    font = {'family': 'normal',
-            'size': 22}
-    plt.rc('font', **font)
-    plt.plot(energy_levels, density_of_states)
-    plt.grid(True)
-    plt.xlabel('Energy (eV)', fontsize=24)
-    plt.ylabel('Density of States', fontsize=24)
-    plt.title('Density of States vs Energy', fontsize=40)
-    plt.show()
+    plot_data(2, energy_levels, density_of_states,
+              'Energy (eV)', 'Density of States',
+              'Density of States vs Energy')
 
 
 def dos_eig(energy_levels, min_energy, max_energy, num_bins, eigenvalues):
@@ -651,6 +615,7 @@ def dos_eig(energy_levels, min_energy, max_energy, num_bins, eigenvalues):
         # Energy increment
         inc = (max_energy - min_energy) / num_bins
         for energy in eigenvalues:
+            energy = np.real(energy)
             energy2 = -energy
 
             # Find bins
@@ -674,13 +639,53 @@ def dos_eig(energy_levels, min_energy, max_energy, num_bins, eigenvalues):
             # Lorentzian (broadening) function -
             # gamma changes the broadening amount
             # Used to broaden the delta functions
-            # Also normalizes the density of states
             density_of_states[energy] = np.sum((1 / np.pi) *
                                                (gamma / (((energy_levels[energy]
                                                            - eigenvalues) ** 2)
                                                          + (gamma ** 2))))
 
     return density_of_states
+
+
+def plot_data(fig_num, x_data, y_data, x_label, y_label, title,
+              plot=0, large_font=True):
+    """
+
+    :param fig_num:
+    :param x_data:
+    :param y_data:
+    :param x_label:
+    :param y_label:
+    :param title:
+    :param plot:
+    :param large_font:
+    """
+    plt.figure(fig_num)
+    if large_font:
+        font = {'size': 22}
+        plt.rc('font', **font)
+    if plot == 0:
+        plt.plot(x_data, y_data)
+    elif plot == 1:
+        plt.scatter(x_data, y_data)
+    elif plot == 2:
+        plt.hist(y_data, bins=40, range=(np.amin(x_data), np.amax(x_data)),
+                 normed=True, histtype='step')
+    plt.grid(True)
+    if large_font:
+        plt.xlabel(x_label, fontsize=24)
+        plt.ylabel(y_label, fontsize=24)
+        plt.title(title, horizontalalignment='center', fontsize=40)
+    else:
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
+        plt.title(title, horizontalalignment='center')
+    # plt.figtext(0, .01, 'Eigenvalues: %s, Data Points: %s, '
+    #                     'Gamma: %s\n Size: %s x_points %s angstroms'
+    #                     % (Ne, energy_levels.shape[0] - 1, gamma, WIDTH,
+    #                        HEIGHT))
+
+    plt.draw()
 
 
 def main():

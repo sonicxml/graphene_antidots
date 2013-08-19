@@ -62,14 +62,14 @@ else:
 #
 
 DISTANCE = True     # True if x and y are distances, False if they are numbers of atoms
-NANOMETERS = False   # True if parameter units are in nanometers, false if in Angstroms
+NANOMETERS = True   # True if parameter units are in nanometers, false if in Angstroms
 
 #
 # General Lattice Parameters
 #
 
-WIDTH = 5             # Width of the unit cell
-HEIGHT = 2              # Height of the unit cell
+WIDTH = 1             # Width of the unit cell
+HEIGHT = 1              # Height of the unit cell
 CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
 
 #
