@@ -41,9 +41,11 @@ A = 1.42             # Carbon-carbon bond length in Angstroms
 T = 2.7              # Tight-binding nearest-neighbor hopping parameter
 
 if ARMCHAIR:
-    W_LEG = 0.71      # Horizontal leg: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
+    W_LEG = 0.71      # Horizontal leg: Hypotenuse (1.42 Angstroms) / 2
+                      # because it's a 30-60-90 triangle
     DW_LEG = 2.84     # W_LEG * 4 (width of hexagon)
-    H_LEG = 1.2306    # Vertical leg: W_LEG * sqrt(3) (for the other leg of the triangle)
+    H_LEG = 1.2306    # Vertical leg: W_LEG * sqrt(3)
+                      # (for the other leg of the triangle)
     DH_LEG = 2.4612   # H_LEG * 2  (height of hexagon)
     X_DIST = 2.13     # 3a/2
     Y_DIST = H_LEG    # (sqrt(3)*a)/2
@@ -52,24 +54,28 @@ if ARMCHAIR:
         X_DIST = 1.42
         Y_DIST = 1.42
 else:
-    H_LEG = 0.71      # Vertical LEG: Hypotenuse (1.42 Angstroms) / 2 because it's a 30-60-90 triangle
+    H_LEG = 0.71      # Vertical LEG: Hypotenuse (1.42 Angstroms) / 2
+                      # because it's a 30-60-90 triangle
     DH_LEG = 2.84     # H_LEG * 4 (width of hexagon)
-    W_LEG = 1.2306    # Horizontal LEG: H_LEG * sqrt(3) (for the other LEG of the triangle)
+    W_LEG = 1.2306    # Horizontal LEG: H_LEG * sqrt(3)
+                      # (for the other LEG of the triangle)
     DW_LEG = 2.4612   # W_LEG * 2  (height of hexagon)
 
 #
 # Units
 #
 
-DISTANCE = True     # True if x and y are distances, False if they are numbers of atoms
-NANOMETERS = True   # True if parameter units are in nanometers, false if in Angstroms
+DISTANCE = True      # True if x and y are distances,
+                     # False if they are numbers of atoms
+NANOMETERS = False   # True if parameter units are in nanometers,
+                     # False if in Angstroms
 
 #
 # General Lattice Parameters
 #
 
-WIDTH = 1             # Width of the unit cell
-HEIGHT = 1              # Height of the unit cell
+WIDTH = 5             # Width of the unit cell
+HEIGHT = 2              # Height of the unit cell
 CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
 
 #
@@ -77,7 +83,7 @@ CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
 #
 
 TRIM_EDGES = False  # Trim unbonded atoms from edges
-BINNING = False      # Use binning method?
+BINNING = True      # Use binning method?
 ON_SITE = False    # Add on-site energies for edge atoms (including antidot edges)
 PERIODIC_BOUNDARY = True    # Use periodic boundary conditions
 

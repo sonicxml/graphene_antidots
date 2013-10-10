@@ -33,6 +33,7 @@ import scipy.sparse as sparse       # Used for sparse matrices
 from scipy import linalg            # Linear Algebra Functions
 import scipy.io as sio              # Used for saving arrays as MATLAB files
 from progressbar import Bar, Counter, ETA, Percentage, ProgressBar, Timer
+from time import sleep
 
 import parameters as p
 np.use_fastnumpy = True  # Enthought Canopy comes with "fastnumpy", so enable it
@@ -146,7 +147,7 @@ def vector_coord_generator(x_times, y_times):
     #
     # Coordinate Generator
     # TODO: Make it work with odd numbers of atoms on x-axis
-    # TODO: Fix BUILD_HOR, rename tmp_x, tmp_y, tmp_l
+    # TODO: Fix BUILD_HOR
     #
 
     tmp_x = np.arange(0, int(x_times if p.BUILD_HOR else y_times), out_inc)
@@ -246,23 +247,24 @@ def antidot_generator(vector_coord):
     return vector_coord
 
 
-def dos_calculator(coord, x_atoms, y_atoms):
+def dos_calculator(coord, atoms):
     """
 
     :param coord:
-    :param x_atoms:
-    :param y_atoms:
+    :param atoms:
     """
-    length = np.amax(coord[:, 0, 0]) * p.X_DIST + p.Z_DIST
-    width = np.amax(coord[:, 0, 1]) * p.Y_DIST
-    # Generate Hamiltonian
-    (hamiltonian, atoms) = hamiltonian_calculator(coord, x_atoms, y_atoms)
-    del coord
-    np.save('hamiltonian', hamiltonian)
+    # length and width of the graphene sheet
+    dists = np.array([np.amax(coord[:, 0, 0]) * p.X_DIST + p.Z_DIST,
+                      np.amax(coord[:, 0, 1]) * p.Y_DIST])
+    print("Length of the Lattice: %s Angstroms" % str(dists[0]))
+    print("Width of the Lattice: %s Angstroms" % str(dists[1]))
+
+    # ProgressBar gets overzealous in displaying itself
+    sleep(0.1)
 
     if p.BINNING:
         # Number of bins
-        num_data_points = 40
+        num_data_points = 100
     else:
         # Number of data points
         num_data_points = (6 * p.T) / atoms
@@ -273,28 +275,25 @@ def dos_calculator(coord, x_atoms, y_atoms):
 
     if p.BINNING:
         # Energy Levels to bin density of states at
-        energy_levels = np.linspace(min_energy, max_energy, num_data_points)
+        inc = (max_energy - min_energy) / num_data_points
+        energy_levels = np.linspace(min_energy,
+                                    max_energy, num_data_points)
     else:
         # Energy Levels to calculate density of states at
         energy_levels = np.arange(min_energy,
                                   max_energy + num_data_points, num_data_points)
 
     if p.PERIODIC_BOUNDARY:
-        del hamiltonian
-
         eigenvalues = np.array([])
         marker = 0
 
         # k vectors
         k_min = 0
         k_max = (2 * np.pi) / p.A
-        num_k_points = 50
+        num_k_points = 99
         x_points = np.linspace(k_min, k_max, num_k_points)
-        y_points = np.linspace(k_min, k_max, num_k_points)
+        y_points = np.linspace(0, 0, num_k_points)
         kx_points, ky_points = np.meshgrid(x_points, y_points)
-
-        # length and width of the graphene sheet
-        dists = np.array([length, width])
 
         # Progress Bar
         widgets = [Percentage(), ' ', Bar('>'), ' K vectors done: ', Counter(),
@@ -303,16 +302,20 @@ def dos_calculator(coord, x_atoms, y_atoms):
 
         k_vector = None
         for k_vector in np.array(zip(kx_points.ravel(), ky_points.ravel())):
+            hamiltonian = np.load('hamiltonian.npy')
+            hamiltonian = hamiltonian.astype(np.complex, copy=False)
+
             r_vector = k_vector * dists
+
+            # Because the r vector will be different depending on the
+            # orientation of the i and j atoms,
 
             left_phase_factor = p.T * np.e ** (-1j * np.dot(k_vector, r_vector))
             right_phase_factor = p.T * np.e ** (1j * np.dot(k_vector, r_vector))
 
-            hamiltonian = np.load('hamiltonian.npy')
-            hamiltonian = hamiltonian.astype(np.complex, copy=False)
-
             upper_triangle_index = np.triu_indices(hamiltonian.shape[0])
-
+            upper_triangle_index = np.where(
+                hamiltonian[upper_triangle_index] == -p.T)
             hamiltonian[upper_triangle_index] = np.dot(
                 hamiltonian[upper_triangle_index], right_phase_factor)
             del upper_triangle_index
@@ -322,42 +325,51 @@ def dos_calculator(coord, x_atoms, y_atoms):
                 hamiltonian[lower_triangle_index], left_phase_factor)
             del lower_triangle_index
 
-            eigenvalues = np.append(eigenvalues, linalg.eigvals(hamiltonian))
-            # if not marker:
-            #     density_of_states = dos_eig(hamiltonian, energy_levels,
-            # min_energy, max_energy, num_data_points)
-            #     marker += 1
-            # else:
-            #     density_of_states += dos_eig(hamiltonian, energy_levels,
-            # min_energy, max_energy, num_data_points)
-            #     marker += 1
+            # eigenvalues = np.append(eigenvalues, linalg.eigvals(hamiltonian))
+            eigenvalues = np.append(eigenvalues,
+                                    linalg.eigh(hamiltonian, eigvals_only=True,
+                                                overwrite_a=True))
             marker += 1
             pbar.update(marker)
         pbar.finish()
-        # density_of_states = dos_eig(energy_levels, min_energy, max_energy,
-        #                             num_data_points, eigenvalues)
+
+        # hamiltonian = np.load('hamiltonian.npy')
+        # print(hamiltonian)
+        # hamiltonian = hamiltonian.astype(np.complex, copy=False)
+        #
+        # eigenvalues = linalg.eigvals(hamiltonian)
+        # eigenvalues = linalg.eigh(hamiltonian, eigvals_only=True,
+        #                           overwrite_a=True)
+
+        # Disregard imaginary part - eigenvalues are 'a + 0i' form
+        # since Hermitian matrices only have real eigenvalues
+        eigenvalues = np.real(eigenvalues)
+
+        # Sort Eigenvalues
+        eigenvalues = np.sort(eigenvalues)
+        # eigenvalues /= p.T
+        np.savetxt('Eigenvalues-Test.txt', eigenvalues,
+                   delimiter='\t', fmt='%f')
+        density_of_states = dos_eig(energy_levels, min_energy, max_energy,
+                                    num_data_points, eigenvalues)
     else:
+        hamiltonian = np.load('hamiltonian.npy')
+
         # Calculate Density of States
         eigenvalues = linalg.eigvals(hamiltonian)
         density_of_states = dos_eig(energy_levels, min_energy,
                                     max_energy, num_data_points, eigenvalues)
 
-    # sio.savemat('Hphase.mat', {'hamiltonian': hamiltonian}, oned_as='column')
-    # print(k_vector)
-    # print(r_vector)
-    # print(left_phase_factor, right_phase_factor)
-    # print(left_phase_factor * p.T, right_phase_factor * p.T)
-    # density_of_states /= (atoms * num_k_points)
-    # data = np.column_stack((energy_levels, density_of_states))
-    # np.savetxt('pythonEigenvalues.txt', eigenvalues, delimiter='\t', fmt='%f')
-    # np.savetxt('pythonDoSData-Eig.txt', data, delimiter='\t', fmt='%f')
-    # np.savetxt('pythonDoSBroad.txt', density_of_states, delimiter='\t',
-    # fmt='%f')
-    # np.save('Ndata', density_of_states)
+    density_of_states /= (atoms * num_k_points)
+    if p.BINNING:
+        plot_data(2, energy_levels, density_of_states,
+                  'Energy (eV)', 'Density of States',
+                  'Density of States vs Energy', plot=0)
+    else:
+        plot_data(2, energy_levels, density_of_states,
+                  'Energy (eV)', 'Density of States',
+                  'Density of States vs Energy', plot=0)
 
-    plot_data(2, energy_levels, density_of_states,
-              'Energy (eV)', 'Density of States',
-              'Density of States vs Energy', plot=0)
     print("DoS calculation complete")
 
 
@@ -490,19 +502,13 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
         idx = sparse_coords[idx].copy()
         idx = np.array(list(set(tuple(c) for c in idx)))
         sparse_coords = np.array(list(set(tuple(c) for c in sparse_coords)))
-        print(idx)
-        print(sparse_coords)
+        data = np.repeat(-p.T, sparse_coords.shape[0])
         sparse_coords = np.append(sparse_coords, idx, axis=0)
+        data = np.append(data, np.repeat())
     else:
         sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
+        data = np.repeat(-p.T, sparse_coords.shape[0])
 
-    data = np.repeat(-p.T, sparse_coords.shape[0])
-        # idx = [i for i in xrange(sparse_coords.shape[0])
-        # if ((sparse_coords[i, 0] == 0 and
-        #       sparse_coords[i, 1] == coord.shape[0] - 1) or
-        #     (sparse_coords[i, 1] == 0 and
-        #       sparse_coords[i, 0] == coord.shape[0] - 1))]
-        # data[idx] *= 2
     hamiltonian = sparse.coo_matrix((data, (sparse_coords[:, 0],
                                             sparse_coords[:, 1])),
                                     shape=(num, num)).tocsc()
@@ -607,30 +613,27 @@ def dos_eig(energy_levels, min_energy, max_energy, num_bins, eigenvalues):
 
     density_of_states = np.empty(energy_levels.shape[0])
 
-    # Disregard imaginary part - eigenvalues are 'a + 0i' form
-    # eigenvalues = np.real(eigenvalues)
-
     if p.BINNING:
         # Binning Method
         # Energy increment
         inc = (max_energy - min_energy) / num_bins
         for energy in eigenvalues:
             energy = np.real(energy)
-            energy2 = -energy
+            # energy2 = -energy
 
             # Find bins
             bin1 = np.floor((energy - min_energy) / inc)
-            bin2 = np.floor((energy2 - min_energy) / inc)
+            # bin2 = np.floor((energy2 - min_energy) / inc)
 
             # Tally bins (-1 because Python indexing starts at 0)
             try:
                 density_of_states[bin1] += 1
             except IndexError:
                 pass
-            try:
-                density_of_states[bin2] += 1
-            except IndexError:
-                pass
+            # try:
+            #     density_of_states[bin2] += 1
+            # except IndexError:
+            #     pass
 
     else:
         # Broadening Method
@@ -669,8 +672,8 @@ def plot_data(fig_num, x_data, y_data, x_label, y_label, title,
     elif plot == 1:
         plt.scatter(x_data, y_data)
     elif plot == 2:
-        plt.hist(y_data, bins=40, range=(np.amin(x_data), np.amax(x_data)),
-                 normed=True, histtype='step')
+        # plt.hist(y_data, bins=100, range=(np.amin(x_data), np.amax(x_data)),
+        plt.hist(y_data, bins=x_data.shape[0], histtype='step', normed=True)
     plt.grid(True)
     if large_font:
         plt.xlabel(x_label, fontsize=24)
@@ -697,7 +700,15 @@ def main():
     (vector_coord, num_x_atoms, num_y_atoms) = generator_wrapper()
 
     # Calculate Hamiltonian and Density of States
-    dos_calculator(vector_coord, num_x_atoms, num_y_atoms)
+    # Generate Hamiltonian
+    (hamiltonian, atoms) = hamiltonian_calculator(vector_coord,
+                                                  num_x_atoms, num_y_atoms)
+    np.save('hamiltonian', hamiltonian)
+    print('Is Hamiltonian Hermitian? %s' %
+          str((hamiltonian.conj().T == hamiltonian).all()))
+    del hamiltonian
+
+    dos_calculator(vector_coord, atoms)
 
     plt.show()
 
