@@ -190,15 +190,15 @@ def vector_coord_generator(x_times, y_times):
 
 
 def antidot_generator(vector_coord):
-    #
-    # Antidot Generator
-    #
-
     """
 
     :param vector_coord:
     :return:
     """
+    #
+    # Antidot Generator
+    #
+
     if p.XY_COORD_CREATION or p.CUT_TYPE:
         for x_antidot_num in xrange(p.ANTIDOT_X_NUM):
             for y_antidot_num in xrange(p.ANTIDOT_Y_NUM):
@@ -247,27 +247,34 @@ def antidot_generator(vector_coord):
     return vector_coord
 
 
-def dos_calculator(coord, atoms):
+def dos_calculator(vector_coord, num_x_atoms, num_y_atoms):
     """
 
-    :param coord:
+    :param vector_coord:
     :param atoms:
     """
+
+    # Calculate Hamiltonian and Density of States
+    # Generate Hamiltonian
+    (hamiltonian, atoms, left_edge, right_edge, top_edge, bottom_edge) = \
+        hamiltonian_calculator(vector_coord, num_x_atoms, num_y_atoms)
+    np.save('hamiltonian', hamiltonian)
+    print('Is Hamiltonian Hermitian? %s' %
+          str((hamiltonian.conj().T == hamiltonian).all()))
+
     # length and width of the graphene sheet
-    dists = np.array([np.amax(coord[:, 0, 0]) * p.X_DIST + p.Z_DIST,
-                      np.amax(coord[:, 0, 1]) * p.Y_DIST])
+    dists = np.array([np.amax(vector_coord[:, 0, 0]) * p.X_DIST + p.Z_DIST,
+                      np.amax(vector_coord[:, 0, 1]) * p.Y_DIST])
     print("Length of the Lattice: %s Angstroms" % str(dists[0]))
     print("Width of the Lattice: %s Angstroms" % str(dists[1]))
 
-    # ProgressBar gets overzealous in displaying itself
-    sleep(0.1)
-
     if p.BINNING:
         # Number of bins
-        num_data_points = 100
+        num_data_points = 200
     else:
         # Number of data points
-        num_data_points = (6 * p.T) / atoms
+        # num_data_points = (6 * p.T) / atoms
+        num_data_points = .03
 
     # Min and Max Energy Values
     min_energy = -3 * p.T
@@ -287,13 +294,29 @@ def dos_calculator(coord, atoms):
         eigenvalues = np.array([])
         marker = 0
 
+        idx1, idx2 = np.where(hamiltonian < -p.T)
+        idx1 = np.array(idx1).ravel()
+        idx2 = np.array(idx2).ravel()
+        del hamiltonian
+        vert_edges1, vert_edges2 = np.meshgrid(bottom_edge, top_edge)
+        vert_edges1 = np.append(vert_edges1, vert_edges2)
+        vert_edges2 = vert_edges1[::-1].copy()
+        side_edges1, side_edges2 = np.meshgrid(left_edge, right_edge)
+        side_edges1 = np.append(side_edges1, side_edges2)
+        side_edges2 = side_edges1[::-1].copy()
+
         # k vectors
         k_min = 0
-        k_max = (2 * np.pi) / p.A
-        num_k_points = 99
-        x_points = np.linspace(k_min, k_max, num_k_points)
-        y_points = np.linspace(0, 0, num_k_points)
+        k_x_max = (2 * np.pi) / dists[0]
+        k_y_max = 0  # (2 * np.pi) / dists[1]
+        num_k_points = 20
+        x_points = np.linspace(k_min, k_x_max, num_k_points)
+        print(x_points)
+        y_points = np.linspace(k_min, k_y_max, num_k_points)
         kx_points, ky_points = np.meshgrid(x_points, y_points)
+
+        # ProgressBar gets overzealous in displaying itself
+        sleep(0.1)
 
         # Progress Bar
         widgets = [Percentage(), ' ', Bar('>'), ' K vectors done: ', Counter(),
@@ -302,30 +325,102 @@ def dos_calculator(coord, atoms):
 
         k_vector = None
         for k_vector in np.array(zip(kx_points.ravel(), ky_points.ravel())):
-            hamiltonian = np.load('hamiltonian.npy')
-            hamiltonian = hamiltonian.astype(np.complex, copy=False)
+            hamiltonian = np.array(np.load('hamiltonian.npy'))
+            hamiltonian = hamiltonian.astype(np.complex128, copy=False)
 
-            r_vector = k_vector * dists
+            for i in zip(idx1, idx2):
+                if np.real(hamiltonian[i]) == -p.T * 1.5:
+                    if i in zip(vert_edges1.ravel(), vert_edges2.ravel())\
+                            and i in zip(side_edges1.ravel(),
+                                         side_edges2.ravel()):
+                        if i[0] < i[1]:
+                            r_vector = np.array([-dists[0], -dists[1]])
+                            hamiltonian[i] = (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector)))
+                        elif i[0] > i[1]:
+                            r_vector = np.array([dists[0], dists[1]])
+                            hamiltonian[i] = (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector)))
+                    elif i in zip(side_edges1.ravel(), side_edges2.ravel()):
+                        if i[0] < i[1]:
+                            r_vector = np.array([-dists[0], 0])
+                            hamiltonian[i] = (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector)))
+                        elif i[0] > i[1]:
+                            r_vector = np.array([dists[0], 0])
+                            hamiltonian[i] = (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector)))
+                    elif i in zip(vert_edges1.ravel(), vert_edges2.ravel()):
+                        if i[0] < i[1]:
+                            r_vector = np.array([0, -dists[1]])
+                            hamiltonian[i] = (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector)))
+                        elif i[0] > i[1]:
+                            r_vector = np.array([0, dists[1]])
+                            hamiltonian[i] = (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector)))
 
-            # Because the r vector will be different depending on the
-            # orientation of the i and j atoms,
+                elif np.real(hamiltonian[i]) == -p.T + (-p.T * 1.5):
+                    if i in zip(vert_edges1.ravel(), vert_edges2.ravel()):
+                        if i[0] < i[1]:
+                            r_vector = np.array([0, -dists[1]])
+                            hamiltonian[i] = (-p.T +
+                                             (-p.T * np.e ** (1j *
+                                                             np.dot(k_vector,
+                                                                    r_vector))))
+                        elif i[0] > i[1]:
+                            r_vector = np.array([0, dists[1]])
+                            hamiltonian[i] = (-p.T +
+                                             (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                     r_vector))))
+                    elif i in zip(side_edges1.ravel(), side_edges2.ravel()):
+                        if i[0] < i[1]:
+                            r_vector = np.array([-dists[0], 0])
+                            hamiltonian[i] = (-p.T +
+                                             (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                    r_vector))))
+                        elif i[0] > i[1]:
+                            r_vector = np.array([dists[0], 0])
+                            hamiltonian[i] = (-p.T +
+                                             (-p.T * np.e ** (1j *
+                                                              np.dot(k_vector,
+                                                                    r_vector))))
+                elif np.real(hamiltonian[i]) == 2 * (-p.T * 1.5):
+                    if i in zip(side_edges1.ravel(), side_edges2.ravel()):
+                        if i[0] < i[1]:
+                            r_vector1 = np.array([-dists[0], 0])
+                            r_vector2 = np.array([-dists[0], -dists[1]])
+                            hamiltonian[i] = ((-p.T * np.e ** (1j *
+                                                               np.dot(k_vector,
+                                                                      r_vector1)
+                            ))
+                                              + (-p.T * np.e ** (1j *
+                                                                np.dot(k_vector,
+                                                                      r_vector2)
+                            )))
+                        elif i[0] > i[1]:
+                            r_vector1 = np.array([dists[0], 0])
+                            r_vector2 = np.array([dists[0], dists[1]])
+                            hamiltonian[i] = ((-p.T * np.e ** (1j *
+                                                             np.dot(k_vector,
+                                                                    r_vector1)
+                            ))
+                                              + (-p.T * np.e ** (1j *
+                                                             np.dot(k_vector,
+                                                                    r_vector2)
+                            )))
+            if marker == 1:
+                sio.savemat('hphase.mat', {'hamiltonian': hamiltonian},
+                            oned_as='column')
 
-            left_phase_factor = p.T * np.e ** (-1j * np.dot(k_vector, r_vector))
-            right_phase_factor = p.T * np.e ** (1j * np.dot(k_vector, r_vector))
-
-            upper_triangle_index = np.triu_indices(hamiltonian.shape[0])
-            upper_triangle_index = np.where(
-                hamiltonian[upper_triangle_index] == -p.T)
-            hamiltonian[upper_triangle_index] = np.dot(
-                hamiltonian[upper_triangle_index], right_phase_factor)
-            del upper_triangle_index
-
-            lower_triangle_index = np.tril_indices(hamiltonian.shape[0])
-            hamiltonian[lower_triangle_index] = np.dot(
-                hamiltonian[lower_triangle_index], left_phase_factor)
-            del lower_triangle_index
-
-            # eigenvalues = np.append(eigenvalues, linalg.eigvals(hamiltonian))
             eigenvalues = np.append(eigenvalues,
                                     linalg.eigh(hamiltonian, eigvals_only=True,
                                                 overwrite_a=True))
@@ -333,23 +428,11 @@ def dos_calculator(coord, atoms):
             pbar.update(marker)
         pbar.finish()
 
-        # hamiltonian = np.load('hamiltonian.npy')
-        # print(hamiltonian)
-        # hamiltonian = hamiltonian.astype(np.complex, copy=False)
-        #
-        # eigenvalues = linalg.eigvals(hamiltonian)
-        # eigenvalues = linalg.eigh(hamiltonian, eigvals_only=True,
-        #                           overwrite_a=True)
 
         # Disregard imaginary part - eigenvalues are 'a + 0i' form
-        # since Hermitian matrices only have real eigenvalues
+        # Since Hermitian matrices only have real eigenvalues
         eigenvalues = np.real(eigenvalues)
 
-        # Sort Eigenvalues
-        eigenvalues = np.sort(eigenvalues)
-        # eigenvalues /= p.T
-        np.savetxt('Eigenvalues-Test.txt', eigenvalues,
-                   delimiter='\t', fmt='%f')
         density_of_states = dos_eig(energy_levels, min_energy, max_energy,
                                     num_data_points, eigenvalues)
     else:
@@ -362,6 +445,15 @@ def dos_calculator(coord, atoms):
 
     density_of_states /= (atoms * num_k_points)
     if p.BINNING:
+        # print eigenvalues.shape
+        # print np.repeat(kx_points.ravel(), 4).shape
+        # plot_data(2, np.repeat(kx_points.ravel(), 4), eigenvalues,
+
+        kx_points = np.repeat(kx_points.ravel(), atoms)
+        kx_points = np.reshape(kx_points, (kx_points.size, 1))
+        eigenvalues = np.reshape(eigenvalues, (eigenvalues.size, 1))
+        data = np.hstack((kx_points, eigenvalues))
+        np.save('EKx8', data)
         plot_data(2, energy_levels, density_of_states,
                   'Energy (eV)', 'Density of States',
                   'Density of States vs Energy', plot=0)
@@ -434,6 +526,8 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
     del idx, rows, cols, dist_squared
 
     if p.PERIODIC_BOUNDARY:
+        row_data_periodic = np.array([])
+        col_data_periodic = np.array([])
         # Horizontal border
         x_max = np.amax(coord[:, 0, 0])
         coord2 = coord.copy()
@@ -451,8 +545,16 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
 
         rows, cols = rows[idx], cols[idx]
 
-        row_data = np.hstack((row_data, rows))
-        col_data = np.hstack((col_data, cols))
+        edge1, edge2 = np.meshgrid(left_edge, right_edge)
+        mask1 = np.array([c in zip(edge1.ravel(), edge2.ravel())
+                          for c in zip(rows, cols)])
+        mask2 = np.array([c in zip(edge2.ravel(), edge1.ravel())
+                          for c in zip(rows, cols)])
+        mask = mask1 | mask2
+        rows = rows[mask]
+        cols = cols[mask]
+        row_data_periodic = np.hstack((row_data_periodic, rows))
+        col_data_periodic = np.hstack((col_data_periodic, cols))
 
         # Vertical border
         y_max = np.amax(coord[:, 0, 1])
@@ -471,8 +573,45 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
 
         rows, cols = rows[idx], cols[idx]
 
-        row_data = np.hstack((row_data, rows))
-        col_data = np.hstack((col_data, cols))
+        edge1, edge2 = np.meshgrid(bottom_edge, top_edge)
+        mask1 = np.array([c in zip(edge1.ravel(), edge2.ravel())
+                          for c in zip(rows, cols)])
+        mask2 = np.array([c in zip(edge2.ravel(), edge1.ravel())
+                          for c in zip(rows, cols)])
+        mask = mask1 | mask2
+        rows = rows[mask]
+        cols = cols[mask]
+        row_data_periodic = np.hstack((row_data_periodic, rows))
+        col_data_periodic = np.hstack((col_data_periodic, cols))
+
+        # Upper Diagonal border
+        x_max = np.amax(coord[:, 0, 0])
+        coord2 = coord.copy()
+        coord2[:-y_atoms, 0, 0] += x_max + 1
+        coord2[:, 0, 1][np.where(coord[:, 0, 1] != y_max)] += y_max + 1
+        idx = ((np.abs(coord2[:, 0, 0] - coord2[:, 0, 0, None]) <= 2) &
+               (np.abs(coord2[:, 0, 1] - coord2[:, 0, 1, None]) <= 1))
+        rows, cols = np.nonzero(idx)
+        x_arr = ((coord2[rows, 0, 0] - coord2[cols, 0, 0]) * p.X_DIST +
+                 (coord2[rows, 0, 2] - coord2[cols, 0, 2]) * p.Z_DIST)
+        y_arr = (coord2[rows, 0, 1] - coord2[cols, 0, 1]) * p.Y_DIST
+        dist_squared = x_arr * x_arr + y_arr * y_arr
+
+        idx = ((p.A - 0.5) ** 2 <= dist_squared) & \
+              (dist_squared <= (p.A + 0.5) ** 2)
+
+        rows, cols = rows[idx], cols[idx]
+
+        edge1, edge2 = np.meshgrid(left_edge, right_edge)
+        mask1 = np.array([c in zip(edge1.ravel(), edge2.ravel())
+                          for c in zip(rows, cols)])
+        mask2 = np.array([c in zip(edge2.ravel(), edge1.ravel())
+                          for c in zip(rows, cols)])
+        mask = mask1 | mask2
+        rows = rows[mask]
+        cols = cols[mask]
+        row_data_periodic = np.hstack((row_data_periodic, rows))
+        col_data_periodic = np.hstack((col_data_periodic, cols))
 
     if p.ON_SITE:
         row_data = np.concatenate((row_data, left_edge, right_edge))
@@ -484,27 +623,15 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
                                np.repeat(2.7, right_edge.shape[0])))
     elif p.PERIODIC_BOUNDARY:
         sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
-
-        # When simulating periodic boundary conditions,
-        # some edge atoms become double bonded to each other
-        idx = [(np.any(sparse_coords[i, 0] == bottom_edge) and
-               np.any(sparse_coords[i, 1] == top_edge)) or
-               (np.any(sparse_coords[i, 0] == top_edge) and
-               np.any(sparse_coords[i, 1] == bottom_edge))
-               for i in xrange(sparse_coords.shape[0])]
-        idx = np.array(idx)
-        idx2 = [(np.any(sparse_coords[i, 0] == left_edge) and
-                np.any(sparse_coords[i, 1] == right_edge)) or
-                (np.any(sparse_coords[i, 0] == right_edge) and
-                np.any(sparse_coords[i, 1] == left_edge))
-                for i in xrange(sparse_coords.shape[0])]
-        idx = idx | idx2
-        idx = sparse_coords[idx].copy()
-        idx = np.array(list(set(tuple(c) for c in idx)))
-        sparse_coords = np.array(list(set(tuple(c) for c in sparse_coords)))
+        periodic_sparse_coords = np.hstack((row_data_periodic[:, None],
+                                           col_data_periodic[:, None]))
+        if y_max > 1:
+            periodic_sparse_coords = \
+                np.array(list(set(tuple(c) for c in periodic_sparse_coords)))
         data = np.repeat(-p.T, sparse_coords.shape[0])
-        sparse_coords = np.append(sparse_coords, idx, axis=0)
-        data = np.append(data, np.repeat())
+        sparse_coords = np.append(sparse_coords, periodic_sparse_coords, axis=0)
+        data = np.append(data,
+                         np.repeat(-p.T * 1.5, periodic_sparse_coords.shape[0]))
     else:
         sparse_coords = np.hstack((row_data[:, None], col_data[:, None]))
         data = np.repeat(-p.T, sparse_coords.shape[0])
@@ -512,7 +639,6 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
     hamiltonian = sparse.coo_matrix((data, (sparse_coords[:, 0],
                                             sparse_coords[:, 1])),
                                     shape=(num, num)).tocsc()
-
     hamiltonian = hamiltonian.todense()
 
     if p.ON_SITE:
@@ -530,7 +656,7 @@ def hamiltonian_calculator(coord, x_atoms, y_atoms):
     # Help save memory
     garcol.collect()
 
-    return hamiltonian, num
+    return hamiltonian, num, left_edge, right_edge, top_edge, bottom_edge
 
 
 def dos():
@@ -619,21 +745,15 @@ def dos_eig(energy_levels, min_energy, max_energy, num_bins, eigenvalues):
         inc = (max_energy - min_energy) / num_bins
         for energy in eigenvalues:
             energy = np.real(energy)
-            # energy2 = -energy
 
             # Find bins
             bin1 = np.floor((energy - min_energy) / inc)
-            # bin2 = np.floor((energy2 - min_energy) / inc)
 
             # Tally bins (-1 because Python indexing starts at 0)
             try:
                 density_of_states[bin1] += 1
             except IndexError:
                 pass
-            # try:
-            #     density_of_states[bin2] += 1
-            # except IndexError:
-            #     pass
 
     else:
         # Broadening Method
@@ -699,16 +819,7 @@ def main():
     """
     (vector_coord, num_x_atoms, num_y_atoms) = generator_wrapper()
 
-    # Calculate Hamiltonian and Density of States
-    # Generate Hamiltonian
-    (hamiltonian, atoms) = hamiltonian_calculator(vector_coord,
-                                                  num_x_atoms, num_y_atoms)
-    np.save('hamiltonian', hamiltonian)
-    print('Is Hamiltonian Hermitian? %s' %
-          str((hamiltonian.conj().T == hamiltonian).all()))
-    del hamiltonian
-
-    dos_calculator(vector_coord, atoms)
+    dos_calculator(vector_coord, num_x_atoms, num_y_atoms)
 
     plt.show()
 
