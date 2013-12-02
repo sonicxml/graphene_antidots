@@ -74,8 +74,8 @@ NANOMETERS = False   # True if parameter units are in nanometers,
 # General Lattice Parameters
 #
 
-WIDTH = 10             # Width of the unit cell
-HEIGHT = 4              # Height of the unit cell
+WIDTH = 5             # Width of the unit cell
+HEIGHT = 2              # Height of the unit cell
 CUT_TYPE = 0       # 0 if no antidots, 1 if rectangular
 
 #

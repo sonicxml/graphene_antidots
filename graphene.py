@@ -308,10 +308,9 @@ def dos_calculator(vector_coord, num_x_atoms, num_y_atoms):
         # k vectors
         k_min = 0
         k_x_max = (2 * np.pi) / dists[0]
-        k_y_max = 0  # (2 * np.pi) / dists[1]
-        num_k_points = 20
+        k_y_max = (2 * np.pi) / dists[1]
+        num_k_points = 297
         x_points = np.linspace(k_min, k_x_max, num_k_points)
-        print(x_points)
         y_points = np.linspace(k_min, k_y_max, num_k_points)
         kx_points, ky_points = np.meshgrid(x_points, y_points)
 
